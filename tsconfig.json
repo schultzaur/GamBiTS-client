@@ -1,0 +1,12 @@
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "target": "es6",
+    "outDir": "out",
+    "sourceMap": true
+  },
+  "include": [
+    "main.ts",
+    "modules/*"
+  ],
+}
