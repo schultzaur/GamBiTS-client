@@ -6,8 +6,7 @@
     "sourceMap": true
   },
   "include": [
-    "main.ts",
-    "modules/*",
+    "src/*",
     "tests/*"
   ],
 }
