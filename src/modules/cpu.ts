@@ -1,6 +1,6 @@
 // Define: registers, clock, etc.
 
-class CPU {
+export default class CPU {
     reg = {
         A: 0, F: 0,
         B: 0, C: 0,
@@ -72,7 +72,7 @@ class CPU {
     ]
 
     cb_map = [
-        this.RLC, this.RRC,  //0x00-0x0F
+        this.RLC,  this.RRC,  //0x00-0x0F
         this.RL,   this.RR,  //0x10-0x1F
         this.SLA,  this.SRA, //0x20-0x2F
         this.SWAP, this.SRL, //0x30-0x3F
@@ -90,12 +90,18 @@ class CPU {
         this.SET,  this.SET, //0xF0-0xFF
     ]
 
+    exec(opcode)
+    {
+        
+    }
+
     /* gb cpu manual - by DP */
     CB() {}
 
     IDK() {}
 
     NOP() {}
+    
     HALT() {}
     STOP() {}
     DI() {}
@@ -147,5 +153,3 @@ class CPU {
     RET() {}
     RETI() {}
 }
-
-let cpu = new CPU();

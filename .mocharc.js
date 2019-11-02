@@ -1,6 +1,6 @@
 module.exports = {
     diff: true,
-    spec: "out/test/*.js",
+    spec: "out/tests/*.js",
     extension: ['js'],
     opts: false,
     package: './package.json',
