@@ -1,0 +1,1 @@
+// implement functions to read/write bytes, and the arrays of memory, and also load a rom
