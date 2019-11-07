@@ -38,10 +38,8 @@ export class CPU {
     registers: { -readonly [key in keyof typeof Register]: number }
     flags: { -readonly [key in keyof typeof Flag]: number }
 
-    constructor(memory?: Memory)
+    constructor()
     {
-        this.memory = memory || new Memory();
-
         this.registers = {} as any
         this.flags = {} as any
 
@@ -56,7 +54,7 @@ export class CPU {
 
     snapshot(): CPU
     {
-        let cpu = new CPU(this.memory.snapshot());
+        let cpu = new CPU();
 
         for (var register of Registers) {
             cpu.registers[register] = this.registers[register];
@@ -65,6 +63,8 @@ export class CPU {
         for (var flag of Flags) {
             cpu.flags[flag] = this.flags[flag];
         }
+
+        // TODO: Memory/etc?
 
         return cpu;
     }
