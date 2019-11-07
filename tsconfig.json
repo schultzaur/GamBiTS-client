@@ -4,10 +4,11 @@
     "target": "es6",
     "module": "CommonJS",
     "outDir": "out",
-    "sourceMap": true
+    "sourceMap": true,
+    "preserveConstEnums": true
   },
   "include": [
-    "src/*",
-    "tests/*"
+    "src/**/*",
+    "tests/**/*"
   ],
 }

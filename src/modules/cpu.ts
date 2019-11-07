@@ -1,24 +1,75 @@
 // Define: registers, clock, etc.
+import Memory from './memory.js';
 
-export default class CPU {
-    reg = {
-        A: 0, F: 0,
-        B: 0, C: 0,
-        D: 0, E: 0,
-        H: 0, L: 0,
-        PC: 0,
-        SP: 0,
-    }
+export const enum Register {
+    A = "A", F = "F",
+    B = "B", C = "C",
+    D = "D", E = "E",
+    H = "H", L = "L",
+    PC = "PC",
+    SP = "SP"
+}
 
-    flag =
+export const Registers: Register[] = [
+    Register.A, Register.F,
+    Register.B, Register.C,
+    Register.D, Register.E,
+    Register.H, Register.L,
+    Register.PC,
+    Register.SP,
+]
+
+export const enum Flag {
+    Z = "Z", // Zero
+    N = "N", // Subtract
+    H = "H", // Half-carry
+    C = "C" // Carry
+}
+
+export const Flags: Flag[] = [
+    Flag.Z,
+    Flag.N,
+    Flag.H,
+    Flag.C,
+]
+
+export class CPU {
+    memory: Memory;
+    registers: { -readonly [key in keyof typeof Register]: number }
+    flags: { -readonly [key in keyof typeof Flag]: number }
+
+    constructor(memory?: Memory)
     {
-        Z: 0, // Zero
-        N: 0, // Subtract
-        H: 0, // Half-carry
-        C: 0, // Carry
+        this.memory = memory || new Memory();
+
+        this.registers = {} as any
+        this.flags = {} as any
+
+        for (var register of Registers) {
+            this.registers[register] = 0;
+        }
+
+        for (var flag of Flags) {
+            this.flags[flag] = 0;
+        }
     }
-    
-    byte_to_reg = ["B", "C", "D", "E", "H", "L", "(HL)", "A"]
+
+    snapshot(): CPU
+    {
+        let cpu = new CPU(this.memory.snapshot());
+
+        for (var register of Registers) {
+            cpu.registers[register] = this.registers[register];
+        }
+
+        for (var flag of Flags) {
+            cpu.flags[flag] = this.flags[flag];
+        }
+
+        return cpu;
+    }
+
+    static byte_to_reg = ["B", "C", "D", "E", "H", "L", "(HL)", "A"]
 
     // resource: https://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
     opcode_map = [
@@ -124,11 +175,23 @@ export default class CPU {
     XOR() {}
     CP() {}
 
-    INC() {}
+    INC() {
+        // implement memory for proper opcode execution
+        this.registers[Register.A] = (this.registers[Register.A] + 1) % 256;
+
+        this.flags[Flag.Z] = this.registers[Register.A] == 0 ? 1 : 0
+        this.flags[Flag.N] = 0;
+        this.flags[Flag.H] = this.registers[Register.A] % 16 == 0 ? 1 : 0
+    }
+
     DEC() {}
     SWAP() {}
     DAA() {}
-    CPL() {}
+    CPL() {
+        this.registers[Register.A] ^= 0xFF;
+        this.flags[Flag.H] = 1;
+        this.flags[Flag.N] = 1;
+    }
     CCF() {}
     SCF() {}
 

@@ -1,6 +1,6 @@
 module.exports = {
     diff: true,
-    spec: "out/tests/*.js",
+    spec: "out/tests/**/*.js",
     extension: ['js'],
     opts: false,
     package: './package.json',
@@ -9,6 +9,6 @@ module.exports = {
     slow: 75,
     timeout: 2000,
     ui: 'qunit',
-    'watch-files': ['lib/**/*.js', 'test/**/*.js'],
+    'watch-files': ['out/src/**/*.js', 'out/tests/**/*.js'],
     'watch-ignore': []
 };
