@@ -1,5 +1,5 @@
 import { CPU, Flag, Flags, Register, Registers } from '../src/modules/cpu';
-import { assertState } from './test-helpers';
+import { assertState, assertEqual } from './test-helpers';
 
 suite('NOP');
 
@@ -7,7 +7,7 @@ test('0x00 NOP', function() {
     var cpu = new CPU();
     var snapshot = cpu.snapshot();
 
-    cpu.NOP();
+    cpu.NOP(0x00);
     
     assertState(
         cpu,
@@ -24,7 +24,7 @@ test('0x2F CPL', function() {
     var cpu = new CPU();
     var snapshot = cpu.snapshot();
 
-    cpu.CPL();
+    cpu.CPL(0x2F);
     
     assertState(
         cpu,
@@ -42,7 +42,7 @@ test('0x3C INC A', function() {
     var cpu = new CPU();
     var snapshot = cpu.snapshot();
 
-    cpu.INC();
+    cpu.INC(0x3C);
     
     assertState(
         cpu,
@@ -51,4 +51,52 @@ test('0x3C INC A', function() {
         {},
         {},
     )
+});
+
+suite('LD');
+
+test('0x46 LD B, (HL)', function() {
+    var cpu = new CPU();
+
+    cpu.memory.write(0xC010, 0x23);
+    cpu.registers[Register.H] = 0xC0;
+    cpu.registers[Register.L] = 0x10;
+    
+    var snapshot = cpu.snapshot();
+
+    cpu.LD(0x46);
+    
+    assertState(
+        cpu,
+        snapshot,
+        { [Register.B]: 0x23},
+        {},
+        {},
+    )
+});
+
+test('0x77 LD (HL), A', function() {
+    var cpu = new CPU();
+
+    cpu.registers[Register.A] = 0x23;
+    cpu.registers[Register.H] = 0xC0;
+    cpu.registers[Register.L] = 0x10;
+    
+    var snapshot = cpu.snapshot();
+
+    cpu.LD(0x77);
+    
+    assertState(
+        cpu,
+        snapshot,
+        {},
+        {},
+        {},
+    )
+
+    assertEqual(
+        0x23,
+        cpu.memory.read(0xC010),
+        "memory 0xC010"
+    );
 });

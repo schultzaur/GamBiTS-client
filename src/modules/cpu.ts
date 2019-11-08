@@ -33,6 +33,17 @@ export const Flags: Flag[] = [
     Flag.C,
 ]
 
+const byte_to_reg: (Register | "(HL)")[] = [
+    Register.B,
+    Register.C,
+    Register.D,
+    Register.E,
+    Register.H,
+    Register.L, 
+    "(HL)",
+    Register.A
+];
+
 export class CPU {
     memory: Memory;
     registers: { -readonly [key in keyof typeof Register]: number }
@@ -40,6 +51,8 @@ export class CPU {
 
     constructor()
     {
+        this.memory = new Memory();
+
         this.registers = {} as any
         this.flags = {} as any
 
@@ -69,15 +82,13 @@ export class CPU {
         return cpu;
     }
 
-    static byte_to_reg = ["B", "C", "D", "E", "H", "L", "(HL)", "A"]
-
     // resource: https://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
     opcode_map = [
         this.NOP,  this.LD,   this.LD,   this.INC,  this.INC,  this.DEC,  this.LD,   this.RLCA, //0x00-0x07
         this.LD,   this.ADD,  this.LD,   this.DEC,  this.INC,  this.DEC,  this.LD,   this.RRCA, //0x08-0x0F
  
-        this.STOP, this.LD,   this.LD,   this.INC,  this.INC,  this.DEC,  this.LD,   this.RLC,  //0x10-0x17
-        this.JR,   this.ADD,  this.LD,   this.DEC,  this.INC,  this.DEC,  this.LD,   this.RRC,  //0x18-0x1F
+        this.STOP, this.LD,   this.LD,   this.INC,  this.INC,  this.DEC,  this.LD,   this.RLA,  //0x10-0x17
+        this.JR,   this.ADD,  this.LD,   this.DEC,  this.INC,  this.DEC,  this.LD,   this.RRA,  //0x18-0x1F
  
         this.JR,   this.LD,   this.LD,   this.INC,  this.INC,  this.DEC,  this.LD,   this.DAA,  //0x20-0x27
         this.JR,   this.ADD,  this.LD,   this.DEC,  this.INC,  this.DEC,  this.LD,   this.CPL,  //0x28-0x2F
@@ -141,41 +152,93 @@ export class CPU {
         this.SET,  this.SET, //0xF0-0xFF
     ]
 
-    exec(opcode)
+    step()
     {
-        
+        let opcode: number = this.memory.read(this.registers.PC);
+        this.registers.PC = (this.registers.PC + 1) & 0xFFFF;
+        this.opcode_map[opcode](opcode);
+    }
+    
+    /* gb cpu manual - by DP */
+    CB(opcode: number) {
+        let extended_opcode: number = this.memory.read(this.registers.PC);
+        this.registers.PC = (this.registers.PC + 1) & 0xFFFF;
+        this.cb_map[extended_opcode](extended_opcode);
     }
 
-    /* gb cpu manual - by DP */
-    CB() {}
+    IDK(opcode: number) {
+        // TODO - implement invalid instructions. Just halt?
+    }
 
-    IDK() {}
-
-    NOP() {}
+    NOP(opcode: number) {}
     
-    HALT() {}
-    STOP() {}
-    DI() {}
-    EI() {}
+    HALT(opcode: number) {
+        // TODO - implement HALT
+    }
+    STOP(opcode: number) {
+        // TODO - implement HALT
+    }
+    DI(opcode: number) {
+        // TODO - implement interrupts
+    }
+    EI(opcode: number) {
+        // TODO - implement interrupts
+    }
 
-    LD() {}
-    LDD() {}
-    LDI() {}
-    LDH() {}
-    PUSH() {}
-    POP() {}
+    LD(opcode: number) {
+        let row: number = opcode & 0xF0;
+        let col: number = opcode & 0x0F;
 
-    ADD() {}
-    ADC() {}
-    SUB() {}
-    SBC() {}
+        switch(row)
+        {
+            case 0x00:
+            case 0x10:
+            case 0x20:
+            case 0x30:
+                break;
+            case 0x40:
+            case 0x50:
+            case 0x60:
+            case 0x70:
+                let source: Register | "(HL)" = byte_to_reg[opcode % 8];
+                let target: Register | "(HL)" = byte_to_reg[(opcode - 0x40) >> 3];
 
-    AND() {}
-    OR() {}
-    XOR() {}
-    CP() {}
+                let value: number = source == "(HL)"
+                    ? this.memory.read((this.registers[Register.H] << 8) + this.registers[Register.L])
+                    : this.registers[source];
 
-    INC() {
+                if (target == "(HL)")
+                {
+                    this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
+                }
+                else
+                {
+                    this.registers[target] = value;
+                }
+
+                break;
+            case 0xE0:
+                break;
+            case 0xF0:
+                break;
+        }
+    }
+
+    LDH(opcode: number) {}
+    PUSH(opcode: number) {}
+    POP(opcode: number) {}
+
+    ADD(opcode: number) {}
+    ADC(opcode: number) {}
+    SUB(opcode: number) {}
+    SBC(opcode: number) {}
+
+    AND(opcode: number) {}
+    OR(opcode: number) {}
+    XOR(opcode: number) {}
+    CP(opcode: number) {}
+
+    INC(opcode: number) {
         // implement memory for proper opcode execution
         this.registers[Register.A] = (this.registers[Register.A] + 1) % 256;
 
@@ -184,35 +247,38 @@ export class CPU {
         this.flags[Flag.H] = this.registers[Register.A] % 16 == 0 ? 1 : 0
     }
 
-    DEC() {}
-    SWAP() {}
-    DAA() {}
-    CPL() {
+    DEC(opcode: number) {}
+    SWAP(opcode: number) {}
+    DAA(opcode: number) {}
+    CPL(opcode: number) {
         this.registers[Register.A] ^= 0xFF;
         this.flags[Flag.H] = 1;
         this.flags[Flag.N] = 1;
     }
-    CCF() {}
-    SCF() {}
+    CCF(opcode: number) {}
+    SCF(opcode: number) {}
 
-    RL() {}
-    RLC() {}
-    RLCA() {}
-    RR() {}
-    RRC() {}
-    RRCA() {}
-    SLA() {}
-    SRA() {}
-    SRL() {}
+    RLCA(opcode: number) {}
+    RLA(opcode: number) {}
+    RRCA(opcode: number) {}
+    RRA(opcode: number) {}
 
-    BIT() {}
-    SET() {}
-    RES() {}
+    RL(extended_opcode: number) {}
+    RLC(extended_opcode: number) {}
+    RR(extended_opcode: number) {}
+    RRC(extended_opcode: number) {}
+    SLA(extended_opcode: number) {}
+    SRA(extended_opcode: number) {}
+    SRL(extended_opcode: number) {}
 
-    JP() {}
-    JR() {}
-    CALL() {}
-    RST() {}
-    RET() {}
-    RETI() {}
+    BIT(extended_opcode: number) {}
+    SET(extended_opcode: number) {}
+    RES(extended_opcode: number) {}
+
+    JP(opcode: number) {}
+    JR(opcode: number) {}
+    CALL(opcode: number) {}
+    RST(opcode: number) {}
+    RET(opcode: number) {}
+    RETI(opcode: number) {}
 }

@@ -20,9 +20,9 @@ export function assertState(
 ) {
     for (var register of Registers) {
         if (register in expectedRegisters) {
-            assertEqual(expectedRegisters[register], currentCpu.registers[register], `register ${flag}`);
+            assertEqual(expectedRegisters[register], currentCpu.registers[register], `register ${register}`);
         } else {
-            assertEqual(previousCpu.registers[register], currentCpu.registers[register], `register ${flag}`);
+            assertEqual(previousCpu.registers[register], currentCpu.registers[register], `register ${register}`);
         }
     }
 
