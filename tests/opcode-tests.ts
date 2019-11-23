@@ -1,5 +1,5 @@
-import { CPU, Flag, Flags, Register, Registers } from '../src/modules/cpu';
-import { assertState, assertEqual } from './test-helpers';
+import { CPU, Flag, Register } from './../src/modules/cpu.js';
+import { assertState, assertEqual } from './test-helpers.js';
 
 suite('NOP');
 

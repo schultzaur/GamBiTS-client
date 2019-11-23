@@ -1,4 +1,4 @@
-import { CPU, Flag, Flags, Register, Registers } from '../src/modules/cpu';
+import { CPU, Flag, Flags, Register, Registers } from './../src/modules/cpu.js';
 
 export function assertEqual(
     expected: number,
