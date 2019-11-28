@@ -67,31 +67,33 @@ export default class Memory {
     {
         address = address & 0xFFFF;
         
+        let value: number;
+
         if (address < 0x4000) {
             if (this.hasBoot && address < 0x100) {
-                return BootRom[address];
+                value = BootRom[address];
             } else {
-                return this.externalRom[address];
+                value = this.externalRom[address];
             }
         } else if (address < 0x8000) {
-            return this.externalRom[address - 0x8000 + (0x8000 * this.externalRomBank)];
+            value = this.externalRom[address - 0x8000 + (0x8000 * this.externalRomBank)];
         } else if (address < 0xA000) {
-            return this.videoRam[address - 0x8000];
+            value = this.videoRam[address - 0x8000];
         } else if (address < 0xC000) {
-            return this.externalRam[address - 0xA000 + (0x2000 * this.externalRamBank)];
+            value = this.externalRam[address - 0xA000 + (0x2000 * this.externalRamBank)];
         } else if (address < 0xE000) {
-            return this.workRam[address - 0xC000];
+            value = this.workRam[address - 0xC000];
         } else if (address < 0xFE00) {
-            return this.workRam[address - 0xE000];
+            value = this.workRam[address - 0xE000];
         } else if (address < 0xFEA0) {
-            return this.videoRam[address - 0xFE00];
+            value = this.videoRam[address - 0xFE00];
         } else if (address < 0xFF00) {
-            return 0;
+            value = 0;
         } else {
             // Special stuff.
         }
 
-        return 0;
+        return value || 0;
     }
 
     write(address: number, value: number): void

@@ -1,102 +1,90 @@
 import { CPU, Flag, Register } from './../src/modules/cpu.js';
-import { assertState, assertEqual } from './test-helpers.js';
+import { assertEqual, assertState, setupTest } from './test-helpers.js';
 
-suite('NOP');
+suite('0x00 NOP');
+test("Basic", function() {
+    var [cpu, snapshot] = setupTest([0x00]);
 
-test('0x00 NOP', function() {
-    var cpu = new CPU();
-    var snapshot = cpu.snapshot();
+    cpu.step();
 
-    cpu.NOP(0x00);
-    
     assertState(
         cpu,
         snapshot,
-        { [Register.A]: 0},
-        { [Flag.C]: 0 },
+        4,
+        { [Register.PC]: snapshot.registers.PC + 1 },
         {},
+        {}
     )
 });
 
-suite('CPL');
+suite('0x2F CPL');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest([0x2F], { [Register.A]: 0x12 });
 
-test('0x2F CPL', function() {
-    var cpu = new CPU();
-    var snapshot = cpu.snapshot();
-
-    cpu.CPL(0x2F);
+    cpu.step();
     
     assertState(
         cpu,
         snapshot,
-        { [Register.A]: 255},
+        4,
+        { [Register.A]: 0xED, [Register.PC]: snapshot.registers.PC + 1 },
         { [Flag.H]: 1, [Flag.N]: 1},
         {},
     )
 });
 
 
-suite('INC');
+suite('0x3C INC A');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest([0x3C], { [Register.A]: 0x12 });
 
-test('0x3C INC A', function() {
-    var cpu = new CPU();
-    var snapshot = cpu.snapshot();
-
-    cpu.INC(0x3C);
+    cpu.step();
     
     assertState(
         cpu,
         snapshot,
-        { [Register.A]: 1},
+        4,
+        { [Register.A]: 0x13, [Register.PC]: snapshot.registers.PC + 1 },
         {},
         {},
     )
 });
 
-suite('LD');
-
-test('0x46 LD B, (HL)', function() {
-    var cpu = new CPU();
-
-    cpu.memory.write(0xC010, 0x23);
-    cpu.registers[Register.H] = 0xC0;
-    cpu.registers[Register.L] = 0x10;
-    
-    var snapshot = cpu.snapshot();
-
-    cpu.LD(0x46);
-    
-    assertState(
-        cpu,
-        snapshot,
-        { [Register.B]: 0x23},
-        {},
-        {},
-    )
-});
-
-test('0x77 LD (HL), A', function() {
-    var cpu = new CPU();
-
-    cpu.registers[Register.A] = 0x23;
-    cpu.registers[Register.H] = 0xC0;
-    cpu.registers[Register.L] = 0x10;
-    
-    var snapshot = cpu.snapshot();
-
-    cpu.LD(0x77);
-    
-    assertState(
-        cpu,
-        snapshot,
-        {},
-        {},
-        {},
-    )
-
-    assertEqual(
-        0x23,
-        cpu.memory.read(0xC010),
-        "memory 0xC010"
+suite('0x46 LD B,(HL)');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x46],
+        { [Register.H]: 0xC0, [Register.L]: 0x10 },
+        { 0xC010: 0x23 },
     );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        8,
+        { [Register.B]: 0x23, [Register.PC]: snapshot.registers.PC + 1 },
+        {},
+        {},
+    );
+});
+
+suite('0x77 LD (HL),A');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x77],
+        { [Register.A]: 0x23, [Register.H]: 0xC0, [Register.L]: 0x10 },
+    );
+    
+    cpu.step();
+
+    assertState(
+        cpu,
+        snapshot,
+        8,
+        { [Register.PC]: snapshot.registers.PC + 1 },
+        {},
+        { 0xC010: 0x23 },
+    )
 });
