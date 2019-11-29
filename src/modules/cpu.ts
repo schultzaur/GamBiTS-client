@@ -455,7 +455,29 @@ export class CPU {
     }
 
     SWAP = (opcode: number) => {}
-    DAA = (opcode: number) => {}
+
+    DAA = (opcode: number) => {
+        // TODO test this once ADD/SUB are implemented
+        if (this.flags.N == 0){
+            if (this.registers.A > 0x99 || this.flags.C == C_true) {
+                this.registers.A = (this.registers.A + 0x60) & 0xFF;
+                this.flags.C = C_true;
+            }
+            if ((this.registers.A & 0xF) > 0x9 || this.flags.H == H_true) {
+                this.registers.A = (this.registers.A + 0x6) & 0xFF;
+            }
+        } else {
+            if (this.flags.C == C_true) {
+                this.registers.A = (this.registers.A - 0x60) & 0xFF;
+            }
+            if (this.flags.H == H_true) {
+                this.registers.A = (this.registers.A - 0x6) & 0xFF;
+            }
+        }
+
+        this.set_flag_z(this.registers.A);
+        this.flags.H = 0;
+    }
 
     CPL = (opcode: number) => {
         this.registers[Register.A] ^= 0xFF;

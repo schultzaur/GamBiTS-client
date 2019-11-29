@@ -398,6 +398,28 @@ test('Basic', function() {
     )
 });
 
+suite('0x27 DAA');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x27],
+        { [Register.A]: 0x9C },
+        {},
+        {},
+    );
+
+    cpu.step();
+
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 0x02, },
+        { [Flag.Z]: 0, [Flag.H]: 0, [Flag.C]: C_true},
+        {},
+    )
+});
+
 suite('0x37 SCF');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
