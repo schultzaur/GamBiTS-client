@@ -456,13 +456,24 @@ export class CPU {
 
     SWAP = (opcode: number) => {}
     DAA = (opcode: number) => {}
+
     CPL = (opcode: number) => {
         this.registers[Register.A] ^= 0xFF;
         this.flags.H = H_true;
         this.flags.N = N_true;
     }
-    CCF = (opcode: number) => {}
-    SCF = (opcode: number) => {}
+
+    CCF = (opcode: number) => {
+        this.flags.N = 0;
+        this.flags.H = 0;
+        this.flags.C = C_true - this.flags.C;
+    }
+    
+    SCF = (opcode: number) => {
+        this.flags.N = 0;
+        this.flags.H = 0;
+        this.flags.C = C_true;
+    }
 
     RLCA = (opcode: number) => {}
     RLA = (opcode: number) => {}

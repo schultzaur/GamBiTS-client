@@ -1,6 +1,7 @@
 import { CPU, Flag, Register, Z_true, N_true, H_true, C_true } from './../src/modules/cpu.js';
 import { assertEqual, assertState, setupTest } from './test-helpers.js';
 
+// NOP test also servers as template for other tests.
 suite('0x00 NOP');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -305,6 +306,50 @@ test('Basic', function() {
         4,
         { [Register.A]: 0xED, },
         { [Flag.H]: H_true, [Flag.N]: N_true},
+        {},
+    )
+});
+
+suite('0x37 SCF');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x37],
+        {},
+        {},
+        {},
+    );
+
+    cpu.step();
+
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        {},
+        { [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: C_true },
+        {},
+    )
+});
+
+suite('0x3F CCF');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x3F],
+        {},
+        { [Flag.C]: C_true },
+        {},
+    );
+
+    cpu.step();
+
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        {},
+        { [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0 },
         {},
     )
 });
