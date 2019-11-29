@@ -200,6 +200,28 @@ test('Basic', function() {
     );
 });
 
+suite('0x09 ADD HL,BC');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x09],
+        { [Register.H]: 0x8A, [Register.L]: 0x23, [Register.B]: 0x06, [Register.C]: 0x05, },
+        {},
+        {},
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        8,
+        { [Register.H]: 0x90, [Register.L]: 0x28, },
+        { [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: 0 },
+        {},
+    );
+});
+
 suite('0x0A LD A,(BC)');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -505,6 +527,90 @@ test('Basic', function() {
         {},
         {},
         { 0xC010: 0x23 },
+    )
+});
+
+suite('0x80 ADD A,B');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x80],
+        { [Register.A]: 0x3A, [Register.B]: 0xC7 },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 0x01 },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        {},
+    )
+});
+
+suite('0x88 ADC A,B');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x88],
+        { [Register.A]: 0x3A, [Register.B]: 0xC7 },
+        { [Flag.C]: C_true },
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 0x02 },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        {},
+    )
+});
+
+suite('0xC6 ADD A,d8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xC6, 0xC7],
+        { [Register.A]: 0x3A, },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        8,
+        { [Register.A]: 0x01 },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        {},
+    )
+});
+
+suite('0xCE ADC A,d8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xCE, 0xC7],
+        { [Register.A]: 0x3A, },
+        { [Flag.C]: C_true },
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        8,
+        { [Register.A]: 0x02 },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        {},
     )
 });
 

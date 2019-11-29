@@ -41,7 +41,8 @@ export const Flags: Flag[] = [
     Flag.C,
 ]
 
-const byte_to_reg: (Register | "(HL)")[] = [
+type Target = Register | "(HL)";
+const byte_to_target: Target[] = [
     Register.B,
     Register.C,
     Register.D,
@@ -96,7 +97,6 @@ export class CPU {
 
     step: () => void = () => {
         let opcode: number = this.read_inc_pc();
-        this.timer += 4;
         this.opcode_map[opcode](opcode);
     }
 
@@ -119,6 +119,7 @@ export class CPU {
     read_inc_pc = () => {
         let value = this.memory.read(this.registers.PC);
         this.inc_16(Register.PC);
+        this.timer += 4;
         return value;
     }
 
@@ -138,19 +139,52 @@ export class CPU {
         this.flags.Z = a == 0 ? Z_true : 0;
     }
 
-    set_flag_h_8 = (a: number, b: number) => {
-        // ((a ^ b ^ sum) & 0x10) >> 4
-        this.flags.H = (a & 0xF) + (b & 0xF) > 0xF ? H_true : 0;
+    calc_flag = (mask: number, a: number, b: number, c?: boolean) => {
+        return (a & mask) + (b & mask) + (c ? 1 : 0) > mask;
+    }
+    
+    set_flag_h_8 = (a: number, b: number, c?: boolean) => {
+        this.flags.H = this.calc_flag(0xF, a, b, c) ? H_true : 0;
     }
 
-    set_flag_c = (a: number, b: number) => {
-        this.flags.C = (a & 0xFF) + (b & 0xFF) > 0xFF ? C_true : 0;
+    set_flag_c_8 = (a: number, b: number, c?: boolean) => {
+        this.flags.C = this.calc_flag(0xFF, a, b, c) ? C_true : 0;
+    }
+
+    set_flag_h_16 = (a: number, b: number, c?: boolean) => {
+        // ((a ^ b ^ sum) & 0x10) >> 4
+        this.flags.H = this.calc_flag(0xFFF, a, b, c) ? H_true : 0;
+    }
+
+    set_flag_c_16 = (a: number, b: number, c?: boolean) => {
+        this.flags.C = this.calc_flag(0xFFFF, a, b, c) ? C_true : 0;
+    }
+
+    read_target = (target: Target) => {
+        let value: number;
+
+        if (target == "(HL)") {
+            value = this.memory.read((this.registers[Register.H] << 8) + this.registers[Register.L]);
+            this.timer += 4;
+        } else {
+            value = this.registers[target];
+        }         
+
+        return value;           
+    }
+
+    write_target = (target: Target, value: number) => {
+        if (target == "(HL)") {
+            this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
+            this.timer += 4;
+        } else {
+            this.registers[target] = value;
+        }                    
     }
 
     /* gb cpu manual - by DP */
     CB = (opcode: number) => {
         let extended_opcode: number = this.read_inc_pc();
-        this.timer += 4;
         this.cb_map[extended_opcode].bind(this)(extended_opcode);
     }
 
@@ -183,9 +217,7 @@ export class CPU {
             switch(col) {
                 case 0x1: // LD xx,d16
                     high = this.read_inc_pc();
-                    this.timer += 4;
                     low = this.read_inc_pc();
-                    this.timer += 4;
 
                     switch(row) {
                         case 0x0: 
@@ -234,9 +266,8 @@ export class CPU {
                 case 0x6:
                 case 0xE: // LD x,d8
                     let value = this.read_inc_pc();
-                    this.timer += 4;
 
-                    let target: Register | "(HL)" = byte_to_reg[opcode >> 3];
+                    let target: Target = byte_to_target[opcode >> 3];
 
                     if (target == "(HL)") {
                         this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
@@ -247,9 +278,7 @@ export class CPU {
                     break;
                 case 0x8: // LD (a16),SP
                     high = this.read_inc_pc();
-                    this.timer += 4;
                     low = this.read_inc_pc();
-                    this.timer += 4;
                     let addr = (high << 8) + low;
                     
                     this.memory.write(addr++, this.registers.SP & 0xFF);
@@ -285,8 +314,8 @@ export class CPU {
                     break;
             }
         } else if (opcode < 0x80) {
-            let source: Register | "(HL)" = byte_to_reg[opcode & 0x7];
-            let target: Register | "(HL)" = byte_to_reg[(opcode - 0x40) >> 3];
+            let source: Target = byte_to_target[opcode & 0x7];
+            let target: Target = byte_to_target[(opcode - 0x40) >> 3];
 
             let value: number;
             
@@ -305,14 +334,13 @@ export class CPU {
             }
         } else if (opcode == 0xF8) {
             let value = this.read_inc_pc();
-            this.timer += 4;
 
             let signed = (value & 0x7F) - (value & 0x80);
             
             this.flags.Z = 0;
             this.flags.N = 0;
             this.set_flag_h_8(this.registers.SP, signed);
-            this.set_flag_c(this.registers.SP, signed);
+            this.set_flag_c_8(this.registers.SP, signed);
 
             let addr = this.registers.SP + signed;
             this.registers.H = (addr >> 8) & 0xFF;
@@ -331,12 +359,10 @@ export class CPU {
                 high = 0xFF;
             } else if (col = 0xA) {
                 high = this.read_inc_pc();
-                this.timer += 4;
             }
 
             if (col == 0x0 || col == 0xA) {
                 low = this.read_inc_pc();
-                this.timer += 4;
             } else if (col == 0x02) {
                 low = this.registers.C;
             }
@@ -354,10 +380,57 @@ export class CPU {
     PUSH = (opcode: number) => {}
     POP = (opcode: number) => {}
 
-    ADD = (opcode: number) => {}
-    ADC = (opcode: number) => {}
+    ADD = (opcode: number) => {
+        if (opcode < 0x40) {
+            let hl = (this.registers.H << 8) + this.registers.L;
+
+            let value;
+            switch(opcode) {
+                case 0x09:
+                    value = (this.registers.B << 8) + this.registers.C;
+                    break;
+                case 0x19:
+                    value = (this.registers.D << 8) + this.registers.E;
+                    break;
+                case 0x29:
+                    value = (this.registers.H << 8) + this.registers.L;
+                    break;
+                case 0x39:
+                    value = this.registers.SP;
+                    break;
+            }
+
+            this.flags.N = 0;
+            this.set_flag_h_16(hl, value);
+            this.set_flag_c_16(hl, value);
+
+            hl = (hl + value) & 0xFFFF;
+
+            this.registers.H = hl >> 8;
+            this.registers.L = hl & 0xFF;
+            this.timer += 4;
+        } else {
+            let carry = ((opcode & 0xF) >= 0x8) && this.flags.C == C_true;
+            let value;
+
+            if (opcode < 0x90) {
+                let target: Target = byte_to_target[(opcode - 0x80) % 8];
+                value = this.read_target(target);
+            } else {
+                value = this.read_inc_pc();
+            }
+            
+            this.flags.N = 0;
+            this.set_flag_h_8(this.registers.A, value, carry);
+            this.set_flag_c_8(this.registers.A, value, carry);
+
+            this.registers.A = (this.registers.A + value + (carry ? 1 : 0)) & 0xFF;
+
+            this.set_flag_z(this.registers.A);
+        }
+    }
+
     SUB = (opcode: number) => {}
-    SBC = (opcode: number) => {}
 
     AND = (opcode: number) => {}
     OR = (opcode: number) => {}
@@ -385,7 +458,7 @@ export class CPU {
             }
             this.timer += 4;
         } else {
-            let target: Register | "(HL)" = byte_to_reg[opcode >> 3];
+            let target: Target = byte_to_target[opcode >> 3];
 
             let value;
             if (target == "(HL)") {
@@ -430,7 +503,7 @@ export class CPU {
             }
             this.timer += 4;
         } else {
-            let target: Register | "(HL)" = byte_to_reg[opcode >> 3];
+            let target: Target = byte_to_target[opcode >> 3];
 
             let value;
             if (target == "(HL)") {
@@ -588,7 +661,7 @@ export class CPU {
         this.ADD,  this.ADD,  this.ADD,  this.ADD,  this.ADD,  this.ADD,  this.ADD,  this.ADD,   //0x88-0x8F
  
         this.SUB,  this.SUB,  this.SUB,  this.SUB,  this.SUB,  this.SUB,  this.SUB,  this.SUB,   //0x90-0x97
-        this.SBC,  this.SBC,  this.SBC,  this.SBC,  this.SBC,  this.SBC,  this.SBC,  this.SBC,   //0x98-0x9F
+        this.SUB,  this.SUB,  this.SUB,  this.SUB,  this.SUB,  this.SUB,  this.SUB,  this.SUB,   //0x98-0x9F
  
         this.AND,  this.AND,  this.AND,  this.AND,  this.AND,  this.AND,  this.AND,  this.AND,   //0xA0-0xA7
         this.XOR,  this.XOR,  this.XOR,  this.XOR,  this.XOR,  this.XOR,  this.XOR,  this.XOR,   //0xA8-0xAF
@@ -597,10 +670,10 @@ export class CPU {
         this.CP,   this.CP,   this.CP,   this.CP,   this.CP,   this.CP,   this.CP,   this.CP,    //0xB8-0xBF
 
         this.RET,  this.POP,  this.JP,  this.JP,    this.CALL, this.PUSH, this.ADD,  this.RST,   //0xC0-0xC7
-        this.RET,  this.RET,  this.JP,  this.CB,    this.CALL, this.CALL, this.ADC,  this.RST,   //0xC8-0xCF
+        this.RET,  this.RET,  this.JP,  this.CB,    this.CALL, this.CALL, this.ADD,  this.RST,   //0xC8-0xCF
 
         this.RET,  this.POP,  this.JP,  this.IDK,   this.CALL, this.PUSH, this.SUB,  this.RST,   //0xD0-0xD7
-        this.RET,  this.RETI, this.JP,  this.IDK,   this.CALL, this.IDK,  this.SBC,  this.RST,   //0xD8-0xDF
+        this.RET,  this.RETI, this.JP,  this.IDK,   this.CALL, this.IDK,  this.SUB,  this.RST,   //0xD8-0xDF
 
         this.LD,   this.POP,  this.LD,  this.IDK,   this.IDK,  this.PUSH, this.AND,  this.RST,   //0xE0-0xE7
         this.ADD,  this.JP,   this.LD,  this.IDK,   this.IDK,  this.IDK,  this.XOR,  this.RST,   //0xE8-0xEF
