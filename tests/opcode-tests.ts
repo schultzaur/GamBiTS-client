@@ -111,11 +111,11 @@ test('Basic', function() {
     )
 });
 
-suite('0x0C INC C');
+suite('0x05 DEC B');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0x0C],
-        { [Register.C]: 0x12 },
+        [0x05],
+        { [Register.B]: 0x12 },
         {},
         {},
     );
@@ -127,8 +127,8 @@ test('Basic', function() {
         snapshot,
         snapshot.registers.PC + 1,
         4,
-        { [Register.C]: 0x13 },
-        {},
+        { [Register.B]: 0x11 },
+        { [Flag.N]: N_true, [Flag.H]: H_true, },
         {},
     )
 });
@@ -197,6 +197,72 @@ test('Basic', function() {
         {},
         {},
     );
+});
+
+suite('0x0B DEC BC');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x0B],
+        { [Register.B]: 0x12, [Register.C]: 0x34 },
+        {},
+        {},
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        8,
+        { [Register.B]: 0x12, [Register.C]: 0x33 },
+        {},
+        {},
+    )
+});
+
+suite('0x0C INC C');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x0C],
+        { [Register.C]: 0x12 },
+        {},
+        {},
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.C]: 0x13 },
+        {},
+        {},
+    )
+});
+
+suite('0x0D DEC C');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x0D],
+        { [Register.C]: 0x12 },
+        {},
+        {},
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.C]: 0x11 },
+        { [Flag.N]: N_true, [Flag.H]: H_true, },
+        {},
+    )
 });
 
 suite('0x0E LD C,d8');

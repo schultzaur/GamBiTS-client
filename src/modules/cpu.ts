@@ -409,7 +409,51 @@ export class CPU {
         }
     }
 
-    DEC = (opcode: number) => {}
+    DEC = (opcode: number) => {
+        let col = opcode & 0xF;
+
+        if (col == 0xB) {
+            switch(opcode)
+            {
+                case 0x0B:
+                    this.dec_wrap(Register.B, Register.C);
+                    break;
+                case 0x1B:
+                    this.dec_wrap(Register.D, Register.E);
+                    break;
+                case 0x2B:
+                    this.dec_wrap(Register.H, Register.L);
+                    break;
+                case 0x3B:
+                    this.dec_16(Register.SP);
+                    break;
+            }
+            this.timer += 4;
+        } else {
+            let target: Register | "(HL)" = byte_to_reg[opcode >> 3];
+
+            let value;
+            if (target == "(HL)") {
+                let addr = (this.registers[Register.H] << 8) + this.registers[Register.L];
+                let value = this.memory.read(addr);
+                this.timer += 4;
+
+                this.set_flag_h_8(value, -1);
+                value = (value - 1) & 0xFF;
+                this.set_flag_z(value);
+                
+                this.memory.write(addr, value);
+                this.timer += 4;
+            } else {
+                this.set_flag_h_8(this.registers[target], -1);
+                this.dec_8(target)
+                this.set_flag_z(this.registers[target]);
+            }
+
+            this.flags.N = N_true;
+        }
+    }
+
     SWAP = (opcode: number) => {}
     DAA = (opcode: number) => {}
     CPL = (opcode: number) => {
