@@ -41,15 +41,6 @@ export const Flags: Flag[] = [
     Flag.C,
 ]
 
-function flag_c(a: number, b: number) {
-    return (a & 0xFF) + (b & 0xFF) > 0xFF ? C_true : 0;
-}
-
-function flag_h_8(a: number, b: number) {
-    // ((a ^ b ^ sum) & 0x10) >> 4
-    return (a & 0xF) + (b & 0xF) > 0xF ? H_true : 0;
-}
-
 const byte_to_reg: (Register | "(HL)")[] = [
     Register.B,
     Register.C,
@@ -104,54 +95,61 @@ export class CPU {
     }
 
     step: () => void = () => {
-        let opcode: number = this.memory.read(this.inc_16(Register.PC));
+        let opcode: number = this.read_inc_pc();
         this.timer += 4;
         this.opcode_map[opcode](opcode);
     }
 
     inc_8 = (register: Register) => {
-        let pre = this.registers[register]
-        this.registers[register] = (this.registers[register] + 1) & 0xFF;
-        return pre;
+        return this.registers[register] = (this.registers[register] + 1) & 0xFF;
     }
 
     dec_8 = (register: Register) => {
-        let pre = this.registers[register]
-        this.registers[register] = (this.registers[register] - 1) & 0xFF;
-        return pre;
+        return this.registers[register] = (this.registers[register] - 1) & 0xFF;
     }
 
     inc_16 = (register: Register) => {
-        let pre = this.registers[register]
-        this.registers[register] = (this.registers[register] + 1) & 0xFFFF;
-        return pre;
+        return this.registers[register] = (this.registers[register] + 1) & 0xFFFF;
     }
 
     dec_16 = (register: Register) => {
-        let pre = this.registers[register]
-        this.registers[register] = (this.registers[register] - 1) & 0xFFFF;
-        return pre;
+        return this.registers[register] = (this.registers[register] - 1) & 0xFFFF;
+    }
+
+    read_inc_pc = () => {
+        let value = this.memory.read(this.registers.PC);
+        this.inc_16(Register.PC);
+        return value;
     }
 
     inc_wrap = (registerH: Register, registerL: Register) => {
-        this.inc_8(registerL);
-
-        if (this.registers[registerL] === 0) {
+        if (this.inc_8(registerL) === 0) {
             this.inc_8(registerH);
         }
     }
 
     dec_wrap = (registerH: Register, registerL: Register) => {
-        this.dec_8(registerL)
-
-        if (this.registers[registerL] === 0xFF) { 
+        if (this.dec_8(registerL) === 0xFF) { 
             this.dec_8(registerH)
         }
     }
     
+    set_flag_z = (a: number) => {
+        this.flags.Z = a == 0 ? Z_true : 0;
+    }
+
+    set_flag_h_8 = (a: number, b: number) => {
+        // ((a ^ b ^ sum) & 0x10) >> 4
+        this.flags.H = (a & 0xF) + (b & 0xF) > 0xF ? H_true : 0;
+    }
+
+    set_flag_c = (a: number, b: number) => {
+        this.flags.C = (a & 0xFF) + (b & 0xFF) > 0xFF ? C_true : 0;
+    }
+
     /* gb cpu manual - by DP */
     CB = (opcode: number) => {
-        let extended_opcode: number = this.memory.read(this.inc_16(Register.PC));
+        let extended_opcode: number = this.read_inc_pc();
         this.timer += 4;
         this.cb_map[extended_opcode].bind(this)(extended_opcode);
     }
@@ -184,9 +182,9 @@ export class CPU {
         if (opcode < 0x40) {
             switch(col) {
                 case 0x1: // LD xx,d16
-                    high = this.memory.read(this.inc_16(Register.PC));
+                    high = this.read_inc_pc();
                     this.timer += 4;
-                    low = this.memory.read(this.inc_16(Register.PC));
+                    low = this.read_inc_pc();
                     this.timer += 4;
 
                     switch(row) {
@@ -235,7 +233,7 @@ export class CPU {
                     break;
                 case 0x6:
                 case 0xE: // LD x,d8
-                    let value = this.memory.read(this.inc_16(Register.PC));
+                    let value = this.read_inc_pc();
                     this.timer += 4;
 
                     let target: Register | "(HL)" = byte_to_reg[opcode >> 3];
@@ -248,9 +246,9 @@ export class CPU {
                     }                    
                     break;
                 case 0x8: // LD (a16),SP
-                    high = this.memory.read(this.inc_16(Register.PC));
+                    high = this.read_inc_pc();
                     this.timer += 4;
-                    low = this.memory.read(this.inc_16(Register.PC));
+                    low = this.read_inc_pc();
                     this.timer += 4;
                     let addr = (high << 8) + low;
                     
@@ -306,15 +304,15 @@ export class CPU {
                 this.registers[target] = value;
             }
         } else if (opcode == 0xF8) {
-            let value = this.memory.read(this.inc_16(Register.PC));
+            let value = this.read_inc_pc();
             this.timer += 4;
 
             let signed = (value & 0x7F) - (value & 0x80);
             
-            this.flags[Flag.Z] = 0;
-            this.flags[Flag.N] = 0;
-            this.flags[Flag.H] = flag_h_8(this.registers.SP, signed);
-            this.flags[Flag.C] = flag_c(this.registers.SP, signed);
+            this.flags.Z = 0;
+            this.flags.N = 0;
+            this.set_flag_h_8(this.registers.SP, signed);
+            this.set_flag_c(this.registers.SP, signed);
 
             let addr = this.registers.SP + signed;
             this.registers.H = (addr >> 8) & 0xFF;
@@ -332,12 +330,12 @@ export class CPU {
             if (col == 0x0 || col == 0x2) {
                 high = 0xFF;
             } else if (col = 0xA) {
-                high = this.memory.read(this.inc_16(Register.PC));
+                high = this.read_inc_pc();
                 this.timer += 4;
             }
 
             if (col == 0x0 || col == 0xA) {
-                low = this.memory.read(this.inc_16(Register.PC));
+                low = this.read_inc_pc();
                 this.timer += 4;
             } else if (col == 0x02) {
                 low = this.registers.C;
@@ -367,12 +365,48 @@ export class CPU {
     CP = (opcode: number) => {}
 
     INC = (opcode: number) => {
-        // implement memory for proper opcode execution
-        this.registers[Register.A] = (this.registers[Register.A] + 1) & 0xff;
+        let col = opcode & 0xF;
 
-        this.flags[Flag.Z] = this.registers[Register.A] == 0 ? 1 : 0
-        this.flags[Flag.N] = 0;
-        this.flags[Flag.H] = this.registers[Register.A] % 16 == 0 ? 1 : 0
+        if (col == 0x3) {
+            switch(opcode)
+            {
+                case 0x03:
+                    this.inc_wrap(Register.B, Register.C);
+                    break;
+                case 0x13:
+                    this.inc_wrap(Register.D, Register.E);
+                    break;
+                case 0x23:
+                    this.inc_wrap(Register.H, Register.L);
+                    break;
+                case 0x33:
+                    this.inc_16(Register.SP);
+                    break;
+            }
+            this.timer += 4;
+        } else {
+            let target: Register | "(HL)" = byte_to_reg[opcode >> 3];
+
+            let value;
+            if (target == "(HL)") {
+                let addr = (this.registers[Register.H] << 8) + this.registers[Register.L];
+                let value = this.memory.read(addr);
+                this.timer += 4;
+
+                this.set_flag_h_8(value, 1);
+                value = (value + 1) & 0xFF;
+                this.set_flag_z(value);
+                
+                this.memory.write(addr, value);
+                this.timer += 4;
+            } else {
+                this.set_flag_h_8(this.registers[target], 1);
+                this.inc_8(target)
+                this.set_flag_z(this.registers[target]);
+            }
+
+            this.flags.N = 0;
+        }
     }
 
     DEC = (opcode: number) => {}
@@ -380,8 +414,8 @@ export class CPU {
     DAA = (opcode: number) => {}
     CPL = (opcode: number) => {
         this.registers[Register.A] ^= 0xFF;
-        this.flags[Flag.H] = 1;
-        this.flags[Flag.N] = 1;
+        this.flags.H = H_true;
+        this.flags.N = N_true;
     }
     CCF = (opcode: number) => {}
     SCF = (opcode: number) => {}
