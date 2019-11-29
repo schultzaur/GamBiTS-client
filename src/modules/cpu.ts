@@ -19,6 +19,14 @@ export const Registers: Register[] = [
     Register.SP,
 ]
 
+
+// 7 6 5 4 3 2 1 0
+// Z N H C 0 0 0 0
+export const Z_true: number = 0x80;
+export const N_true: number = 0x40;
+export const H_true: number = 0x20;
+export const C_true: number = 0x10;
+
 export const enum Flag {
     Z = "Z", // Zero
     N = "N", // Subtract
@@ -32,6 +40,15 @@ export const Flags: Flag[] = [
     Flag.H,
     Flag.C,
 ]
+
+function flag_c(a: number, b: number) {
+    return (a & 0xFF) + (b & 0xFF) > 0xFF ? C_true : 0;
+}
+
+function flag_h_8(a: number, b: number) {
+    // ((a ^ b ^ sum) & 0x10) >> 4
+    return (a & 0xF) + (b & 0xF) > 0xF ? H_true : 0;
+}
 
 const byte_to_reg: (Register | "(HL)")[] = [
     Register.B,
@@ -87,15 +104,55 @@ export class CPU {
     }
 
     step: () => void = () => {
-        let opcode: number = this.memory.read(this.registers.PC);
-        this.registers.PC = (this.registers.PC + 1) & 0xFFFF;
+        let opcode: number = this.memory.read(this.inc_16(Register.PC));
+        this.timer += 4;
         this.opcode_map[opcode](opcode);
+    }
+
+    inc_8 = (register: Register) => {
+        let pre = this.registers[register]
+        this.registers[register] = (this.registers[register] + 1) & 0xFF;
+        return pre;
+    }
+
+    dec_8 = (register: Register) => {
+        let pre = this.registers[register]
+        this.registers[register] = (this.registers[register] - 1) & 0xFF;
+        return pre;
+    }
+
+    inc_16 = (register: Register) => {
+        let pre = this.registers[register]
+        this.registers[register] = (this.registers[register] + 1) & 0xFFFF;
+        return pre;
+    }
+
+    dec_16 = (register: Register) => {
+        let pre = this.registers[register]
+        this.registers[register] = (this.registers[register] - 1) & 0xFFFF;
+        return pre;
+    }
+
+    inc_wrap = (registerH: Register, registerL: Register) => {
+        this.inc_8(registerL);
+
+        if (this.registers[registerL] === 0) {
+            this.inc_8(registerH);
+        }
+    }
+
+    dec_wrap = (registerH: Register, registerL: Register) => {
+        this.dec_8(registerL)
+
+        if (this.registers[registerL] === 0xFF) { 
+            this.dec_8(registerH)
+        }
     }
     
     /* gb cpu manual - by DP */
     CB = (opcode: number) => {
-        let extended_opcode: number = this.memory.read(this.registers.PC);
-        this.registers.PC = (this.registers.PC + 1) & 0xFFFF;
+        let extended_opcode: number = this.memory.read(this.inc_16(Register.PC));
+        this.timer += 4;
         this.cb_map[extended_opcode].bind(this)(extended_opcode);
     }
 
@@ -103,10 +160,7 @@ export class CPU {
         // TODO - implement invalid instructions. Just halt?
     }
 
-    NOP = (opcode: number) => {
-        console.log(this)
-        this.timer += 4;
-    }
+    NOP = (opcode: number) => { }
     
     HALT = (opcode: number) => {
         // TODO - implement HALT
@@ -125,44 +179,180 @@ export class CPU {
         let row: number = opcode & 0xF0;
         let col: number = opcode & 0x0F;
 
-        switch(row)
-        {
-            case 0x00:
-            case 0x10:
-            case 0x20:
-            case 0x30:
-                break;
-            case 0x40:
-            case 0x50:
-            case 0x60:
-            case 0x70:
-                let source: Register | "(HL)" = byte_to_reg[opcode % 8];
-                let target: Register | "(HL)" = byte_to_reg[(opcode - 0x40) >> 3];
+        let high: number = 0;
+        let low: number = 0;
+        if (opcode < 0x40) {
+            switch(col) {
+                case 0x1: // LD xx,d16
+                    high = this.memory.read(this.inc_16(Register.PC));
+                    this.timer += 4;
+                    low = this.memory.read(this.inc_16(Register.PC));
+                    this.timer += 4;
 
-                let value: number = source == "(HL)"
-                    ? this.memory.read((this.registers[Register.H] << 8) + this.registers[Register.L])
-                    : this.registers[source];
+                    switch(row) {
+                        case 0x0: 
+                            this.registers.B = high;
+                            this.registers.C = low;
+                            break;
+                        case 0x1:
+                            this.registers.D = high;
+                            this.registers.E = low;
+                            break;
+                        case 0x2:
+                            this.registers.H = high;
+                            this.registers.L = low;
+                            break;
+                        case 0x3:                  
+                            this.registers.SP = ((high << 8) + low);
+                            break;
+                    }
+                    break;
+                case 0x2: // LD (xx),A
+                    switch(row) {
+                        case 0x0: 
+                            high = this.registers.B;
+                            low =  this.registers.C;
+                            break;
+                        case 0x1:
+                            high = this.registers.D;
+                            low = this.registers.E;
+                            break;
+                        case 0x2:
+                        case 0x3:
+                            high = this.registers.H;
+                            low = this.registers.L;
+                            break;
+                    }
 
-                if (target == "(HL)")
-                {
-                    this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
-                }
-                else
-                {
-                    this.registers[target] = value;
-                }
-                
-                this.timer += (source == "(HL)" || target == "(HL)") ? 8 : 4;
+                    this.memory.write((high << 8) + low, this.registers.A);
+                    this.timer += 4;
 
-                break;
-            case 0xE0:
-                break;
-            case 0xF0:
-                break;
+                    if (opcode == 0x22) {
+                        this.inc_wrap(Register.H, Register.L);
+                    } else if (opcode == 0x23) {
+                        this.dec_wrap(Register.H, Register.L);
+                    }
+                    break;
+                case 0x6:
+                case 0xE: // LD x,d8
+                    let value = this.memory.read(this.inc_16(Register.PC));
+                    this.timer += 4;
+
+                    let target: Register | "(HL)" = byte_to_reg[opcode >> 3];
+
+                    if (target == "(HL)") {
+                        this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
+                        this.timer += 4;
+                    } else {
+                        this.registers[target] = value;
+                    }                    
+                    break;
+                case 0x8: // LD (a16),SP
+                    high = this.memory.read(this.inc_16(Register.PC));
+                    this.timer += 4;
+                    low = this.memory.read(this.inc_16(Register.PC));
+                    this.timer += 4;
+                    let addr = (high << 8) + low;
+                    
+                    this.memory.write(addr++, this.registers.SP & 0xFF);
+                    this.timer += 4;
+                    this.memory.write(addr++, this.registers.SP >> 8);
+                    this.timer += 4;
+                    break;
+                case 0xA: // LD A,(xx)
+                    switch(row) {
+                        case 0x0:
+                            high = this.registers.B;
+                            low =  this.registers.C;
+                            break;
+                        case 0x1:
+                            high = this.registers.D;
+                            low = this.registers.E;
+                            break;
+                        case 0x2:
+                        case 0x3:
+                            high = this.registers.H;
+                            low = this.registers.L;
+                            break;
+                    }
+
+                    this.registers.A = this.memory.read((high << 8) + low);
+                    this.timer += 4;
+
+                    if (opcode == 0xA2) {
+                        this.inc_wrap(Register.H, Register.L);
+                    } else if (opcode == 0xA3) {
+                        this.dec_wrap(Register.H, Register.L);
+                    }
+                    break;
+            }
+        } else if (opcode < 0x80) {
+            let source: Register | "(HL)" = byte_to_reg[opcode & 0x7];
+            let target: Register | "(HL)" = byte_to_reg[(opcode - 0x40) >> 3];
+
+            let value: number;
+            
+            if (source == "(HL)") {
+                value = this.memory.read((this.registers[Register.H] << 8) + this.registers[Register.L])
+                this.timer += 4;
+            } else {
+                value = this.registers[source];
+            }
+
+            if (target == "(HL)") {
+                this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
+                this.timer += 4;
+            } else {
+                this.registers[target] = value;
+            }
+        } else if (opcode == 0xF8) {
+            let value = this.memory.read(this.inc_16(Register.PC));
+            this.timer += 4;
+
+            let signed = (value & 0x7F) - (value & 0x80);
+            
+            this.flags[Flag.Z] = 0;
+            this.flags[Flag.N] = 0;
+            this.flags[Flag.H] = flag_h_8(this.registers.SP, signed);
+            this.flags[Flag.C] = flag_c(this.registers.SP, signed);
+
+            let addr = this.registers.SP + signed;
+            this.registers.H = (addr >> 8) & 0xFF;
+            this.registers.L = addr & 0xFF;
+
+            // extra internal delay
+            // see: (https://github.com/Gekkio/mooneye-gb/blob/9e4ba5e40ca0513edb04d8c9f2b1ca03620ac40b/docs/accuracy.markdown)
+            this.timer += 4;
+        } else if (opcode == 0xF9) {
+            this.registers.SP = ((this.registers.H << 8) + this.registers.L) & 0xFFFF;
+
+            // extra internal delay?
+            this.timer += 4;
+        } else {
+            if (col == 0x0 || col == 0x2) {
+                high = 0xFF;
+            } else if (col = 0xA) {
+                high = this.memory.read(this.inc_16(Register.PC));
+                this.timer += 4;
+            }
+
+            if (col == 0x0 || col == 0xA) {
+                low = this.memory.read(this.inc_16(Register.PC));
+                this.timer += 4;
+            } else if (col == 0x02) {
+                low = this.registers.C;
+            }
+
+            if (row == 0xE0) {
+                this.memory.write((high << 8) + low, this.registers.A)
+                this.timer += 4;
+            } else {
+                this.registers.A = this.memory.read((high << 8) + low)
+                this.timer += 4;
+            }
         }
     }
 
-    LDH = (opcode: number) => {}
     PUSH = (opcode: number) => {}
     POP = (opcode: number) => {}
 
@@ -178,13 +368,11 @@ export class CPU {
 
     INC = (opcode: number) => {
         // implement memory for proper opcode execution
-        this.registers[Register.A] = (this.registers[Register.A] + 1) % 256;
+        this.registers[Register.A] = (this.registers[Register.A] + 1) & 0xff;
 
         this.flags[Flag.Z] = this.registers[Register.A] == 0 ? 1 : 0
         this.flags[Flag.N] = 0;
         this.flags[Flag.H] = this.registers[Register.A] % 16 == 0 ? 1 : 0
-
-        this.timer += 4;
     }
 
     DEC = (opcode: number) => {}
@@ -194,7 +382,6 @@ export class CPU {
         this.registers[Register.A] ^= 0xFF;
         this.flags[Flag.H] = 1;
         this.flags[Flag.N] = 1;
-        this.timer += 4;
     }
     CCF = (opcode: number) => {}
     SCF = (opcode: number) => {}
@@ -267,10 +454,10 @@ export class CPU {
         this.RET,  this.POP,  this.JP,  this.IDK,   this.CALL, this.PUSH, this.SUB,  this.RST,   //0xD0-0xD7
         this.RET,  this.RETI, this.JP,  this.IDK,   this.CALL, this.IDK,  this.SBC,  this.RST,   //0xD8-0xDF
 
-        this.LDH,  this.POP,  this.LD,  this.IDK,   this.IDK,  this.PUSH, this.AND,  this.RST,   //0xE0-0xE7
+        this.LD,   this.POP,  this.LD,  this.IDK,   this.IDK,  this.PUSH, this.AND,  this.RST,   //0xE0-0xE7
         this.ADD,  this.JP,   this.LD,  this.IDK,   this.IDK,  this.IDK,  this.XOR,  this.RST,   //0xE8-0xEF
 
-        this.LDH,  this.POP,  this.LD,  this.DI,    this.IDK,  this.PUSH, this.OR,   this.RST,   //0xF0-0xF7
+        this.LD,   this.POP,  this.LD,  this.DI,    this.IDK,  this.PUSH, this.OR,   this.RST,   //0xF0-0xF7
         this.LD,   this.LD,   this.LD,  this.EI,    this.IDK,  this.IDK,  this.CP,   this.RST,   //0xF8-0xFF
     ]
 

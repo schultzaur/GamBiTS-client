@@ -14,15 +14,21 @@ export function assertEqual(
 export function assertState(
     currentCpu: CPU,
     previousCpu: CPU,
+    expectedPC: number,
     expectedCycles: number,
-    expectedRegisters: { [key in keyof typeof Register]?: number },
-    expectedFlags: { [key in keyof typeof Flag]?: number },
-    expectedMemory: { [index: number]: number },
+    expectedRegisters?: { [key in keyof typeof Register]?: number },
+    expectedFlags?: { [key in keyof typeof Flag]?: number },
+    expectedMemory?: { [index: number]: number },
 ) {
     assertEqual(expectedCycles, currentCpu.timer - previousCpu.timer, `elapsed cycles`);
+    assertEqual(expectedPC, currentCpu.registers.PC, `PC`);
 
     for (let register of Registers) {
-        if (register in expectedRegisters) {
+        if (register == Register.PC) {
+            continue;
+        }
+
+        if (expectedRegisters !== undefined && register in expectedRegisters) {
             assertEqual(expectedRegisters[register], currentCpu.registers[register], `register ${register}`);
         } else {
             assertEqual(previousCpu.registers[register], currentCpu.registers[register], `register ${register}`);
@@ -30,7 +36,7 @@ export function assertState(
     }
 
     for (let flag of Flags) {
-        if (flag in expectedFlags) {
+        if (expectedFlags !== undefined && flag in expectedFlags) {
             assertEqual(expectedFlags[flag], currentCpu.flags[flag], `flag ${flag}`);
         } else {
             assertEqual(previousCpu.flags[flag], currentCpu.flags[flag], `flag ${flag}`);
@@ -45,10 +51,12 @@ export function assertState(
 export function setupTest(
     opcode: number[],
     registers?: { [key in keyof typeof Register]?: number },
+    flags?: { [key in keyof typeof Flag]?: number },
     memory?: { [index: number]: number },
 ): CPU[] {
     let cpu = new CPU();
     cpu.memory.hasBoot = true;
+    cpu.memory.write(0x0000, 0x0A);
     cpu.registers.PC = 0x100;
     
     for (const [index, value] of opcode.entries()) {
@@ -57,6 +65,10 @@ export function setupTest(
 
     for (let register in registers) {
         cpu.registers[register] = registers[register];
+    }
+
+    for (let flag in flags) {
+        cpu.flags[flag] = flags[flag];
     }
 
     for (let key in memory) {

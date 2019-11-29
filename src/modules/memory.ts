@@ -46,6 +46,7 @@ export default class Memory {
     externalRam: number[]
     externalRamBank: number;
     externalRamEnabled: boolean;
+    highRam: number[];
     mbcMode: MBCMode;
 
     constructor()
@@ -58,6 +59,7 @@ export default class Memory {
         this.externalRam = [];
         this.externalRamBank = 0;
         this.externalRamEnabled = false;
+        this.highRam = [];
 
         this.mbcMode = MBCMode.ROM;
     }
@@ -80,7 +82,11 @@ export default class Memory {
         } else if (address < 0xA000) {
             value = this.videoRam[address - 0x8000];
         } else if (address < 0xC000) {
-            value = this.externalRam[address - 0xA000 + (0x2000 * this.externalRamBank)];
+            if (this.externalRamEnabled) {
+                value = this.externalRam[address - 0xA000 + (0x2000 * this.externalRamBank)];
+            } else {
+                value = 0xff; // random online sources tell me so.
+            }
         } else if (address < 0xE000) {
             value = this.workRam[address - 0xC000];
         } else if (address < 0xFE00) {
@@ -89,11 +95,15 @@ export default class Memory {
             value = this.videoRam[address - 0xFE00];
         } else if (address < 0xFF00) {
             value = 0;
+        } else if (address < 0xFF80) {
+            // IO stuff
+        } else if (address < 0xFFFF) {
+            value = this.highRam[address - 0xFF80];
         } else {
-            // Special stuff.
+            // interupt enable?
         }
 
-        return value || 0;
+        return (value || 0) & 0xff;
     }
 
     write(address: number, value: number): void
@@ -116,7 +126,7 @@ export default class Memory {
             let bank = value & 0b11;
             switch(this.mbcMode) {
                 case MBCMode.ROM:
-                    this.externalRomBank = bank << 5 + this.externalRomBank & 0b11111;
+                    this.externalRomBank = (bank << 5) + this.externalRomBank & 0b11111;
                     break;
                 case MBCMode.RAM:
                     this.externalRamBank = bank;
@@ -129,7 +139,9 @@ export default class Memory {
         } else if (address < 0xA000) {
             this.videoRam[address - 0x8000] = value;
         } else if (address < 0xC000) {
-            this.externalRam[address - 0xA000 + (0x2000 * this.externalRamBank)] = value;
+            if (this.externalRamEnabled) {
+                this.externalRam[address - 0xA000 + (0x2000 * this.externalRamBank)] = value;
+            }
         } else if (address < 0xE000) {
             this.workRam[address - 0xC000] = value;
         } else if (address < 0xFE00) {
@@ -138,8 +150,12 @@ export default class Memory {
             this.videoRam[address - 0xFE00] = value;
         } else if (address < 0xFF00) {
             // no-op
+        } else if (address < 0xFF80) {
+            // IO stuff
+        } else if (address < 0xFFFF) {
+            this.highRam[address - 0xFF80] = value;
         } else {
-            // Special stuff.
+            // interupt enable
         }
     }
 }
