@@ -197,9 +197,12 @@ export class CPU {
     HALT = (opcode: number) => {
         // TODO - implement HALT
     }
+
     STOP = (opcode: number) => {
         // TODO - implement HALT
+        
     }
+
     DI = (opcode: number) => {
         // TODO - implement interrupts
     }
@@ -625,7 +628,37 @@ export class CPU {
     RES = (extended_opcode: number) => {}
 
     JP = (opcode: number) => {}
-    JR = (opcode: number) => {}
+    JR = (opcode: number) => {
+        let jump;
+
+        let value = this.read_inc_pc();
+
+        switch(opcode) {
+            case 0x18:
+                jump = true;
+                break;
+            case 0x20:
+                jump = this.flags.Z == 0;
+                break;
+            case 0x28:
+                jump = this.flags.Z == Z_true;
+                break;
+            case 0x30:
+                jump = this.flags.C == 0;
+                break;
+            case 0x38:
+                jump = this.flags.C == C_true;
+                break;                
+        }
+
+        if (jump) {
+            let signed = (value & 0x7F) - (value & 0x80);
+
+            this.registers.PC = (this.registers.PC + signed) & 0xFFFF;
+            this.timer += 4;
+        }
+    }
+
     CALL = (opcode: number) => {}
     RST = (opcode: number) => {}
     RET = (opcode: number) => {}
