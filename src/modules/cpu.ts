@@ -468,17 +468,54 @@ export class CPU {
         this.flags.H = 0;
         this.flags.C = C_true - this.flags.C;
     }
-    
+
     SCF = (opcode: number) => {
         this.flags.N = 0;
         this.flags.H = 0;
         this.flags.C = C_true;
     }
 
-    RLCA = (opcode: number) => {}
-    RLA = (opcode: number) => {}
-    RRCA = (opcode: number) => {}
-    RRA = (opcode: number) => {}
+    RLCA = (opcode: number) => {
+        let c = (this.registers.A & 0x80) >> 7;
+        this.registers.A = ((this.registers.A & 0x7F) << 1) + c;
+
+        this.flags.Z = 0;
+        this.flags.N = 0;
+        this.flags.H = 0;
+        this.flags.C = c == 1 ? C_true : 0;
+    }
+
+    RLA = (opcode: number) => {
+        let c_old = this.flags.C == C_true ? 1 : 0;
+        let c_new = (this.registers.A & 0x80) >> 7;
+        this.registers.A = ((this.registers.A & 0x7F) << 1) + c_old;
+
+        this.flags.Z = 0;
+        this.flags.N = 0;
+        this.flags.H = 0;
+        this.flags.C = c_new == 1 ? C_true : 0;
+    }
+
+    RRCA = (opcode: number) => {
+        let c = this.registers.A & 0x01;
+        this.registers.A = ((this.registers.A & 0xFE) >> 1) + (c << 7);
+
+        this.flags.Z = 0;
+        this.flags.N = 0;
+        this.flags.H = 0;
+        this.flags.C = c == 1 ? C_true : 0;
+    }
+
+    RRA = (opcode: number) => {
+        let c_old = this.flags.C == C_true ? 1 : 0;
+        let c_new = this.registers.A & 0x01;
+        this.registers.A = ((this.registers.A & 0xFE) >> 1) + (c_old << 7);
+
+        this.flags.Z = 0;
+        this.flags.N = 0;
+        this.flags.H = 0;
+        this.flags.C = c_new == 1 ? C_true : 0;
+    }
 
     RL = (extended_opcode: number) => {}
     RLC = (extended_opcode: number) => {}
