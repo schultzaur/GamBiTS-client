@@ -7,7 +7,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0x00, 0xC0, 0x10],
         { [Register.A]: 0x12, [Register.B]: 0xC0, [Register.C]: 0x10 },
-        { [Flag.Z]: Z_true },
+        { [Flag.Z]: true },
         { 0xC010: 0x12 }
     );
 
@@ -19,7 +19,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x12, [Register.B]: 0xC0, [Register.C]: 0x10 },
-        { [Flag.Z]: Z_true },
+        { [Flag.Z]: true },
         { 0xC010: 0x12 }
     );
 });
@@ -129,7 +129,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.B]: 0x11 },
-        { [Flag.N]: N_true, [Flag.H]: H_true, },
+        { [Flag.N]: true, [Flag.H]: true, },
         {},
     )
 });
@@ -173,7 +173,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x09 },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 });
@@ -217,7 +217,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         8,
         { [Register.H]: 0x90, [Register.L]: 0x28, },
-        { [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: 0 },
+        { [Flag.N]: false, [Flag.H]: true, [Flag.C]: false },
         {},
     );
 });
@@ -305,7 +305,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.C]: 0x11 },
-        { [Flag.N]: N_true, [Flag.H]: H_true, },
+        { [Flag.N]: true, [Flag.H]: true, },
         {},
     )
 });
@@ -349,7 +349,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x90 },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 });
@@ -383,7 +383,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0x17],
         { [Register.A]: 0xC2 },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 
@@ -395,7 +395,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x85 },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 });
@@ -427,7 +427,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0x1F],
         { [Register.A]: 0xC2 },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 
@@ -439,7 +439,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0xE1 },
-        { [Flag.C]: 0 },
+        { [Flag.C]: false },
         {},
     );
 });
@@ -483,7 +483,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x02, },
-        { [Flag.Z]: 0, [Flag.H]: 0, [Flag.C]: C_true},
+        { [Flag.Z]: false, [Flag.H]: false, [Flag.C]: true },
         {},
     )
 });
@@ -493,7 +493,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0x28, 0x10],
         {},
-        { [Flag.Z]: Z_true },
+        { [Flag.Z]: true },
         {},
     );
 
@@ -527,7 +527,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0xED, },
-        { [Flag.H]: H_true, [Flag.N]: N_true},
+        { [Flag.H]: true, [Flag.N]: true },
         {},
     )
 });
@@ -571,7 +571,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         {},
-        { [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: C_true },
+        { [Flag.N]: false, [Flag.H]: false, [Flag.C]: true },
         {},
     )
 });
@@ -581,7 +581,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0x38, 0x10],
         {},
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 
@@ -603,7 +603,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0x3F],
         {},
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 
@@ -615,7 +615,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         {},
-        { [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0 },
+        { [Flag.N]: false, [Flag.H]: false, [Flag.C]: false },
         {},
     )
 });
@@ -737,7 +737,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x01 },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: true, [Flag.C]: true },
         {},
     )
 });
@@ -747,7 +747,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0x88],
         { [Register.A]: 0x3A, [Register.B]: 0xC7 },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
     
@@ -758,7 +758,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x02 },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: true, [Flag.C]: true },
         {},
     )
 });
@@ -779,7 +779,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x2F },
-        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: true, [Flag.H]: true, [Flag.C]: false },
         {},
     )
 });
@@ -789,7 +789,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0x98],
         { [Register.A]: 0x3B, [Register.B]: 0x4F },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
     
@@ -800,7 +800,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0xEB },
-        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: C_true},
+        { [Flag.Z]: false, [Flag.N]: true, [Flag.H]: true, [Flag.C]: true },
         {},
     )
 });
@@ -821,7 +821,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x1A },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: true, [Flag.C]: false },
         {},
     )
 });
@@ -842,7 +842,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0xF0 },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: false, [Flag.C]: false },
         {},
     )
 });
@@ -863,7 +863,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.A]: 0x5B },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: false, [Flag.C]: false },
         {},
     )
 });
@@ -884,8 +884,50 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { },
-        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: true, [Flag.H]: true, [Flag.C]: false },
         {},
+    )
+});
+
+suite('0xC1 POP BC');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xC1],
+        { [Register.SP]: 0xFFFC, },
+        {},
+        { 0xFFFC: 0x5F, 0xFFFD: 0x3C },
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        12,
+        { [Register.SP]: 0xFFFE, [Register.B]: 0x3C, [Register.C]: 0x5F },
+        {},
+        {},
+    )
+});
+
+suite('0xC5 PUSH BC');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xC5],
+        { [Register.SP]: 0xFFFE, [Register.B]: 0x3C, [Register.C]: 0x5F },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        16,
+        { [Register.SP]: 0xFFFC },
+        {},
+        { 0xFFFC: 0x5F, 0xFFFD: 0x3C },
     )
 });
 
@@ -905,7 +947,7 @@ test('Basic', function() {
         snapshot.registers.PC + 2,
         8,
         { [Register.A]: 0x01 },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: true, [Flag.C]: true },
         {},
     )
 });
@@ -915,7 +957,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0xCE, 0xC7],
         { [Register.A]: 0x3A, },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
     
@@ -926,7 +968,7 @@ test('Basic', function() {
         snapshot.registers.PC + 2,
         8,
         { [Register.A]: 0x02 },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: true, [Flag.C]: true },
         {},
     )
 });
@@ -947,7 +989,7 @@ test('Basic', function() {
         snapshot.registers.PC + 2,
         8,
         { [Register.A]: 0x2F },
-        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: true, [Flag.H]: true, [Flag.C]: false },
         {},
     )
 });
@@ -957,7 +999,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0xDE, 0x4F],
         { [Register.A]: 0x3B },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
     
@@ -968,7 +1010,7 @@ test('Basic', function() {
         snapshot.registers.PC + 2,
         8,
         { [Register.A]: 0xEB },
-        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: C_true},
+        { [Flag.Z]: false, [Flag.N]: true, [Flag.H]: true, [Flag.C]: true },
         {},
     )
 });
@@ -1033,7 +1075,7 @@ test('Basic', function() {
         snapshot.registers.PC + 2,
         8,
         { [Register.A]: 0x1A },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: true, [Flag.C]: false },
         {},
     )
 });
@@ -1075,7 +1117,7 @@ test('Subtract', function() {
         snapshot.registers.PC + 2,
         16,
         { [Register.SP]: 0xC010 },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 });
@@ -1118,7 +1160,7 @@ test('Basic', function() {
         snapshot.registers.PC + 2,
         8,
         { [Register.A]: 0xF0 },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: false, [Flag.C]: false },
         {},
     )
 });
@@ -1172,7 +1214,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0xF3],
         {},
-        { [Flag.IME]: 1 },
+        { [Flag.IME]: true },
         {}
     );
 
@@ -1184,7 +1226,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         {},
-        { [Flag.IME]: 1 },
+        { [Flag.IME]: false },
         {},
     );
 });
@@ -1226,7 +1268,7 @@ test('Subtract', function() {
         snapshot.registers.PC + 2,
         12,
         { [Register.H]: 0xC0, [Register.L]: 0x10 },
-        { [Flag.C]: C_true },
+        { [Flag.C]: true },
         {},
     );
 });
@@ -1291,7 +1333,7 @@ test('Basic', function() {
         snapshot.registers.PC + 2,
         8,
         { [Register.A]: 0x5B },
-        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: false, [Flag.H]: false, [Flag.C]: false },
         {},
     )
 });
@@ -1301,7 +1343,7 @@ test('Basic', function() {
     var [cpu, snapshot] = setupTest(
         [0xFB, 0x00],
         {},
-        { [Flag.IME]: 0},
+        { [Flag.IME]: false },
         {},
     );
 
@@ -1313,7 +1355,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         {},
-        { [Flag.IME]: 0 },
+        { [Flag.IME]: false },
         {},
     );
 
@@ -1328,7 +1370,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         {},
-        { [Flag.IME]: 1 },
+        { [Flag.IME]: true },
         {},
     );
 
@@ -1351,7 +1393,7 @@ test('Basic', function() {
         snapshot.registers.PC + 2,
         8,
         {},
-        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: 0},
+        { [Flag.Z]: false, [Flag.N]: true, [Flag.H]: true, [Flag.C]: false },
         {},
     )
 });

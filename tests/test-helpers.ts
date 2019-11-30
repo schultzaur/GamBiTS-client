@@ -21,9 +21,9 @@ export function assertState(
     previousCpu: CPU,
     expectedPC: number,
     expectedCycles: number,
-    expectedRegisters?: { [key in keyof typeof Register]?: number },
-    expectedFlags?: { [key in keyof typeof Flag]?: number },
-    expectedMemory?: { [index: number]: number },
+    expectedRegisters: { [key in keyof typeof Register]?: number },
+    expectedFlags: { [key in keyof typeof Flag]?: boolean },
+    expectedMemory: { [index: number]: number },
 ) {
     assertEqual(expectedCycles, currentCpu.timer - previousCpu.timer, `elapsed cycles`);
     assertEqual(expectedPC, currentCpu.registers.PC, `PC`);
@@ -35,16 +35,16 @@ export function assertState(
 
         if (expectedRegisters !== undefined && register in expectedRegisters) {
             assertEqual(expectedRegisters[register], currentCpu.registers[register], `register ${register}`);
-        } else {
+        } else if (register != Register.F) {
             assertEqual(previousCpu.registers[register], currentCpu.registers[register], `register ${register}`);
         }
     }
 
     for (let flag of Flags) {
         if (expectedFlags !== undefined && flag in expectedFlags) {
-            assertEqual(expectedFlags[flag], currentCpu.flags[flag], `flag ${flag}`);
+            assertEqual(expectedFlags[flag], currentCpu.get_flag(flag), `flag ${flag}`);
         } else {
-            assertEqual(previousCpu.flags[flag], currentCpu.flags[flag], `flag ${flag}`);
+            assertEqual(previousCpu.get_flag(flag), currentCpu.get_flag(flag), `flag ${flag}`);
         }
     }
 
@@ -52,12 +52,12 @@ export function assertState(
         assertEqual(expectedMemory[key], currentCpu.memory.read(Number(key)), `memory 0x${Number(key).toString(16)}`);
     }
 }
- 
+
 export function setupTest(
     opcode: number[],
-    registers?: { [key in keyof typeof Register]?: number },
-    flags?: { [key in keyof typeof Flag]?: number },
-    memory?: { [index: number]: number },
+    registers: { [key in keyof typeof Register]?: number },
+    flags: { [key in keyof typeof Flag]?: boolean },
+    memory: { [index: number]: number },
 ): CPU[] {
     let cpu = new CPU();
     cpu.memory.hasBoot = true;
@@ -68,12 +68,15 @@ export function setupTest(
         cpu.memory.externalRom[cpu.registers.PC + index] = value & 0xFF;
     }
 
-    for (let register in registers) {
-        cpu.registers[register] = registers[register];
+    for (let register of Registers) {
+        if (register in registers) {
+            cpu.registers[register] = registers[register];
+        }
     }
-
-    for (let flag in flags) {
-        cpu.flags[flag] = flags[flag];
+    for (let flag of Flags) {
+        if (flag in flags) {
+            cpu.set_flag(flag, flags[flag]);
+        }
     }
 
     for (let key in memory) {

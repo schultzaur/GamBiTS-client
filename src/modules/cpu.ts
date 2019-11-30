@@ -19,13 +19,13 @@ export const Registers: Register[] = [
     Register.SP,
 ]
 
-
 // 7 6 5 4 3 2 1 0
 // Z N H C 0 0 0 0
 export const Z_true: number = 0x80;
 export const N_true: number = 0x40;
 export const H_true: number = 0x20;
 export const C_true: number = 0x10;
+export const F_mask: number = Z_true | N_true | H_true | C_true;
 
 export const enum Flag {
     Z = "Z", // Zero
@@ -43,6 +43,13 @@ export const Flags: Flag[] = [
     Flag.IME,
 ]
 
+const flag_mask = {
+    [Flag.Z]: Z_true,
+    [Flag.N]: H_true,
+    [Flag.H]: N_true,
+    [Flag.C]: C_true,
+}
+
 type Target = Register | "(HL)";
 const byte_to_target: Target[] = [
     Register.B,
@@ -58,8 +65,8 @@ const byte_to_target: Target[] = [
 export class CPU {
     memory: Memory;
     registers: { -readonly [key in keyof typeof Register]: number }
-    flags: { -readonly [key in keyof typeof Flag]: number }
     timer: number;
+    ime: boolean;
     halted: boolean;
     stopped: boolean;
 
@@ -68,19 +75,15 @@ export class CPU {
     {
         this.memory = new Memory();
 
-        this.registers = {} as any
-        this.flags = {} as any
+        this.registers = {} as any;
         this.timer = 0;
         this.enable_ime = false;
+        this.ime = false;
         this.halted = false;
         this.stopped = false;
 
         for (var register of Registers) {
             this.registers[register] = 0;
-        }
-
-        for (var flag of Flags) {
-            this.flags[flag] = 0;
         }
     }
 
@@ -92,14 +95,11 @@ export class CPU {
             cpu.registers[register] = this.registers[register];
         }
 
-        for (var flag of Flags) {
-            cpu.flags[flag] = this.flags[flag];
-        }
-        
         cpu.timer = this.timer;
+        cpu.ime = this.ime;
         cpu.enable_ime = this.enable_ime;
-        cpu.halted;
-        cpu.stopped;
+        cpu.halted = this.halted;
+        cpu.stopped = this.stopped;
 
         // TODO: Memory/etc?
 
@@ -121,7 +121,7 @@ export class CPU {
 
         if (this.enable_ime) {
             // TODO: figure out how tf EI/DI/etc work. Possible different for CGB.
-            this.flags.IME = 1;
+            this.ime = true;
             this.enable_ime = false;
         }
 
@@ -151,6 +151,19 @@ export class CPU {
         return value;
     }
 
+    push_sp = (value: number) => {
+        this.dec_16(Register.SP);
+        this.memory.write(this.registers.SP, value);
+        this.timer += 4;
+    }
+
+    pop_sp = () => {
+        let value = this.memory.read(this.registers.SP);
+        this.inc_16(Register.SP);
+        this.timer += 4;
+        return value;
+    }
+
     inc_wrap = (registerH: Register, registerL: Register) => {
         if (this.inc_8(registerL) === 0) {
             this.inc_8(registerH);
@@ -163,8 +176,28 @@ export class CPU {
         }
     }
     
+    get_flag = (flag: Flag): boolean => {
+        if (flag == Flag.IME) {
+            return this.ime;
+        } else {
+            return (this.registers.F & flag_mask[flag]) == flag_mask[flag]
+        }
+    }
+    
+    set_flag = (flag: Flag, value: boolean) => {
+        if (flag == Flag.IME) {
+            this.ime = value;
+        } else {
+            if (value) {
+                this.registers.F |= flag_mask[flag];
+            } else {
+                this.registers.F &= (0xFF ^ flag_mask[flag]);
+            }
+        }
+    }
+
     set_flag_z = (a: number) => {
-        this.flags.Z = a == 0 ? Z_true : 0;
+        this.set_flag(Flag.Z, a == 0);
     }
 
     calc_flag = (mask: number, a: number, b: number, c?: boolean) => {
@@ -172,20 +205,20 @@ export class CPU {
     }
     
     set_flag_h_8 = (a: number, b: number, c?: boolean) => {
-        this.flags.H = this.calc_flag(0xF, a, b, c) ? H_true : 0;
+        this.set_flag(Flag.H, this.calc_flag(0xF, a, b, c));
     }
 
     set_flag_c_8 = (a: number, b: number, c?: boolean) => {
-        this.flags.C = this.calc_flag(0xFF, a, b, c) ? C_true : 0;
+        this.set_flag(Flag.C, this.calc_flag(0xFF, a, b, c));
     }
 
     set_flag_h_16 = (a: number, b: number, c?: boolean) => {
         // ((a ^ b ^ sum) & 0x10) >> 4
-        this.flags.H = this.calc_flag(0xFFF, a, b, c) ? H_true : 0;
+        this.set_flag(Flag.H, this.calc_flag(0xFFF, a, b, c));
     }
 
     set_flag_c_16 = (a: number, b: number, c?: boolean) => {
-        this.flags.C = this.calc_flag(0xFFFF, a, b, c) ? C_true : 0;
+        this.set_flag(Flag.C, this.calc_flag(0xFFFF, a, b, c));
     }
 
     read_target = (target: Target) => {
@@ -205,6 +238,8 @@ export class CPU {
         if (target == "(HL)") {
             this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
             this.timer += 4;
+        } else if (target == Register.F) {
+            this.registers[target] = value & F_mask;
         } else {
             this.registers[target] = value;
         }                    
@@ -223,7 +258,7 @@ export class CPU {
     NOP = (opcode: number) => { }
     
     HALT = (opcode: number) => {
-        if (this.flags.IME == 0 && (this.memory.IE & this.memory.IF) > 0) {
+        if (!this.ime && (this.memory.IE & this.memory.IF) > 0) {
             // weird halt bug... don't increment PC.
             let opcode = this.memory.read(this.registers.PC);
             this.timer += 4; 
@@ -238,7 +273,7 @@ export class CPU {
     }
 
     DI = (opcode: number) => {
-        this.flags.IME = 1;
+        this.ime = false;
     }
 
     EI = (opcode: number) => {
@@ -375,8 +410,8 @@ export class CPU {
 
             let signed = (value & 0x7F) - (value & 0x80);
             
-            this.flags.Z = 0;
-            this.flags.N = 0;
+            this.set_flag(Flag.Z, false);
+            this.set_flag(Flag.N, false);
             this.set_flag_h_8(this.registers.SP, signed);
             this.set_flag_c_8(this.registers.SP, signed);
 
@@ -415,8 +450,62 @@ export class CPU {
         }
     }
 
-    PUSH = (opcode: number) => {}
-    POP = (opcode: number) => {}
+    POP = (opcode: number) => {
+        let registerH: Register;
+        let registerL: Register;
+
+        switch(opcode) {
+            case 0xC1:
+                registerH = Register.B;
+                registerL = Register.C;
+                break;
+            case 0xD1:
+                registerH = Register.B;
+                registerL = Register.C;
+                break;
+            case 0xE1:
+                registerH = Register.H;
+                registerL = Register.L;
+                break;
+            case 0xF1:
+                registerH = Register.A;
+                registerL = Register.F;
+                break;
+        }
+
+        this.write_target(registerL, this.pop_sp());
+        this.write_target(registerH, this.pop_sp());
+    }
+
+    PUSH = (opcode: number) => {
+        let registerH: Register;
+        let registerL: Register;
+
+        switch(opcode) {
+            case 0xC5:
+                registerH = Register.B;
+                registerL = Register.C;
+                break;
+            case 0xD5:
+                registerH = Register.B;
+                registerL = Register.C;
+                break;
+            case 0xE5:
+                registerH = Register.H;
+                registerL = Register.L;
+                break;
+            case 0xF5:
+                registerH = Register.A;
+                registerL = Register.F;
+                break;
+        }
+
+        // extra internal delay?
+        this.timer += 4;
+
+        this.push_sp(this.read_target(registerH));
+        this.push_sp(this.read_target(registerL));
+    }
 
     ADD = (opcode: number) => {
         if (opcode < 0x40) {
@@ -438,7 +527,7 @@ export class CPU {
                     break;
             }
 
-            this.flags.N = 0;
+            this.set_flag(Flag.N, false);
             this.set_flag_h_16(hl, value);
             this.set_flag_c_16(hl, value);
 
@@ -448,7 +537,7 @@ export class CPU {
             this.registers.L = hl & 0xFF;
             this.timer += 4;
         } else if (opcode < 0xD0) {
-            let carry = ((opcode & 0xF) >= 0x8) && this.flags.C == C_true;
+            let carry = ((opcode & 0xF) >= 0x8) && this.get_flag(Flag.C);
             let value;
 
             if (opcode < 0x90) {
@@ -458,7 +547,7 @@ export class CPU {
                 value = this.read_inc_pc();
             }
             
-            this.flags.N = 0;
+            this.set_flag(Flag.N, false);
             this.set_flag_h_8(this.registers.A, value, carry);
             this.set_flag_c_8(this.registers.A, value, carry);
 
@@ -470,8 +559,8 @@ export class CPU {
 
             let signed = (value & 0x7F) - (value & 0x80);
             
-            this.flags.Z = 0;
-            this.flags.N = 0;
+            this.set_flag(Flag.Z, false);
+            this.set_flag(Flag.N, false);
             this.set_flag_h_8(this.registers.SP, signed);
             this.set_flag_c_8(this.registers.SP, signed);
 
@@ -485,7 +574,7 @@ export class CPU {
     }
 
     SUB = (opcode: number) => {
-        let carry = ((opcode & 0xF) >= 0x8) && this.flags.C == C_true ? 1 : 0;
+        let carry = (opcode & 0xF) >= 0x8 && this.get_flag(Flag.C) ? 1 : 0;
         let value;
 
         if (opcode < 0xA0) {
@@ -495,9 +584,9 @@ export class CPU {
             value = this.read_inc_pc();
         }
         
-        this.flags.N = N_true;
-        this.flags.H = ((value & 0xF) + carry) > (this.registers.A & 0xF) ? H_true : 0
-        this.flags.C = (value + carry) > this.registers.A ? C_true : 0;
+        this.set_flag(Flag.N, true);
+        this.set_flag(Flag.H, ((value & 0xF) + carry) > (this.registers.A & 0xF));
+        this.set_flag(Flag.C, (value + carry) > this.registers.A);
 
         this.registers.A = (this.registers.A - value - carry) & 0xFF;
 
@@ -517,9 +606,9 @@ export class CPU {
         this.registers.A &= value;
 
         this.set_flag_z(this.registers.A);
-        this.flags.N = 0;
-        this.flags.H = H_true;
-        this.flags.C = 0;
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, true);
+        this.set_flag(Flag.C, false);
     }
     
     XOR = (opcode: number) => {
@@ -535,9 +624,9 @@ export class CPU {
         this.registers.A ^= value;
 
         this.set_flag_z(this.registers.A);
-        this.flags.N = 0;
-        this.flags.H = 0;
-        this.flags.C = 0;
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, false);
     }
     
     OR = (opcode: number) => {
@@ -553,9 +642,9 @@ export class CPU {
         this.registers.A |= value;
 
         this.set_flag_z(this.registers.A);
-        this.flags.N = 0;
-        this.flags.H = 0;
-        this.flags.C = 0;
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, false);
     }
 
     CP = (opcode: number) => {
@@ -569,9 +658,9 @@ export class CPU {
         }
         
         this.set_flag_z(this.registers.A - value);
-        this.flags.N = N_true;
-        this.flags.H = (value & 0xF) > (this.registers.A & 0xF) ? H_true : 0
-        this.flags.C = value > this.registers.A ? C_true : 0;
+        this.set_flag(Flag.N, true);
+        this.set_flag(Flag.H, (value & 0xF) > (this.registers.A & 0xF));
+        this.set_flag(Flag.C, value > this.registers.A);
     }
 
     INC = (opcode: number) => {
@@ -615,7 +704,7 @@ export class CPU {
                 this.set_flag_z(this.registers[target]);
             }
 
-            this.flags.N = 0;
+            this.set_flag(Flag.N, false);
         }
     }
 
@@ -660,93 +749,92 @@ export class CPU {
                 this.set_flag_z(this.registers[target]);
             }
 
-            this.flags.N = N_true;
+            this.set_flag(Flag.N, true);
         }
     }
 
     SWAP = (opcode: number) => {}
 
     DAA = (opcode: number) => {
-        // TODO test this once ADD/SUB are implemented
-        if (this.flags.N == 0){
-            if (this.registers.A > 0x99 || this.flags.C == C_true) {
+        if (!this.get_flag(Flag.N)){
+            if (this.registers.A > 0x99 || this.get_flag(Flag.C)) {
                 this.registers.A = (this.registers.A + 0x60) & 0xFF;
-                this.flags.C = C_true;
+                this.set_flag(Flag.C, true);
             }
-            if ((this.registers.A & 0xF) > 0x9 || this.flags.H == H_true) {
+            if ((this.registers.A & 0xF) > 0x9 || this.get_flag(Flag.H)) {
                 this.registers.A = (this.registers.A + 0x6) & 0xFF;
             }
         } else {
-            if (this.flags.C == C_true) {
+            if (this.get_flag(Flag.C)) {
                 this.registers.A = (this.registers.A - 0x60) & 0xFF;
             }
-            if (this.flags.H == H_true) {
+            if (this.get_flag(Flag.H)) {
                 this.registers.A = (this.registers.A - 0x6) & 0xFF;
             }
         }
 
         this.set_flag_z(this.registers.A);
-        this.flags.H = 0;
+        this.set_flag(Flag.H, false);
     }
 
     CPL = (opcode: number) => {
         this.registers[Register.A] ^= 0xFF;
-        this.flags.H = H_true;
-        this.flags.N = N_true;
+        this.set_flag(Flag.N, true);
+        this.set_flag(Flag.H, true);
     }
 
     CCF = (opcode: number) => {
-        this.flags.N = 0;
-        this.flags.H = 0;
-        this.flags.C = C_true - this.flags.C;
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, !this.get_flag(Flag.C));
     }
 
     SCF = (opcode: number) => {
-        this.flags.N = 0;
-        this.flags.H = 0;
-        this.flags.C = C_true;
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, true);
     }
 
     RLCA = (opcode: number) => {
-        let c = (this.registers.A & 0x80) >> 7;
+        let c = this.registers.A >> 7;
         this.registers.A = ((this.registers.A & 0x7F) << 1) + c;
 
-        this.flags.Z = 0;
-        this.flags.N = 0;
-        this.flags.H = 0;
-        this.flags.C = c == 1 ? C_true : 0;
+        this.set_flag(Flag.Z, false);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c == 1);
     }
 
     RLA = (opcode: number) => {
-        let c_old = this.flags.C == C_true ? 1 : 0;
-        let c_new = (this.registers.A & 0x80) >> 7;
+        let c_old = this.get_flag(Flag.C) ? 1 : 0;
+        let c_new = this.registers.A >> 7;
         this.registers.A = ((this.registers.A & 0x7F) << 1) + c_old;
 
-        this.flags.Z = 0;
-        this.flags.N = 0;
-        this.flags.H = 0;
-        this.flags.C = c_new == 1 ? C_true : 0;
+        this.set_flag(Flag.Z, false);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c_new == 1);
     }
 
     RRCA = (opcode: number) => {
         let c = this.registers.A & 0x01;
         this.registers.A = ((this.registers.A & 0xFE) >> 1) + (c << 7);
 
-        this.flags.Z = 0;
-        this.flags.N = 0;
-        this.flags.H = 0;
-        this.flags.C = c == 1 ? C_true : 0;
+        this.set_flag(Flag.Z, false);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c == 1);
     }
 
     RRA = (opcode: number) => {
-        let c_old = this.flags.C == C_true ? 1 : 0;
+        let c_old = this.get_flag(Flag.C) ? 1 : 0;
         let c_new = this.registers.A & 0x01;
         this.registers.A = ((this.registers.A & 0xFE) >> 1) + (c_old << 7);
 
-        this.flags.Z = 0;
-        this.flags.N = 0;
-        this.flags.H = 0;
-        this.flags.C = c_new == 1 ? C_true : 0;
+        this.set_flag(Flag.Z, false);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c_new == 1);
     }
 
     RL = (extended_opcode: number) => {}
@@ -772,16 +860,16 @@ export class CPU {
                 jump = true;
                 break;
             case 0x20:
-                jump = this.flags.Z == 0;
+                jump = !this.get_flag(Flag.Z);
                 break;
             case 0x28:
-                jump = this.flags.Z == Z_true;
+                jump = this.get_flag(Flag.Z);
                 break;
             case 0x30:
-                jump = this.flags.C == 0;
+                jump = !this.get_flag(Flag.C);
                 break;
             case 0x38:
-                jump = this.flags.C == C_true;
+                jump = this.get_flag(Flag.C);
                 break;                
         }
 
