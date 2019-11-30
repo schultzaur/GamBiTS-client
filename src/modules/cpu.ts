@@ -248,7 +248,7 @@ export class CPU {
     /* gb cpu manual - by DP */
     CB = (opcode: number) => {
         let extended_opcode: number = this.read_inc_pc();
-        this.cb_map[extended_opcode].bind(this)(extended_opcode);
+        this.cb_map[extended_opcode >> 3](extended_opcode);
     }
 
     IDK = (opcode: number) => {
@@ -788,9 +788,36 @@ export class CPU {
     SRA = (extended_opcode: number) => {}
     SRL = (extended_opcode: number) => {}
 
-    BIT = (extended_opcode: number) => {}
-    SET = (extended_opcode: number) => {}
-    RES = (extended_opcode: number) => {}
+    BIT = (extended_opcode: number) => {
+        let bit = (extended_opcode - 0x40) >>> 3;
+        let bit_mask = 1 << bit;
+        let target: Target  = byte_to_target[extended_opcode & 0xF];
+        let value = this.read_target(target)
+
+        this.set_flag_z(value & bit_mask);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, true);
+    }
+
+    RES = (extended_opcode: number) => {
+        let bit = (extended_opcode - 0x80) >>> 3;
+        let bit_mask = 0xFF ^ (1 << bit);
+        let target: Target  = byte_to_target[extended_opcode & 0xF];
+
+        let value = this.read_target(target)
+        value = value & bit_mask;
+        this.write_target(target, value);
+    }
+
+    SET = (extended_opcode: number) => {
+        let bit = (extended_opcode - 0xC0) >>> 3;
+        let bit_mask = 1 << bit;
+        let target: Target  = byte_to_target[extended_opcode & 0xF];
+        
+        let value = this.read_target(target)
+        value = value | bit_mask;
+        this.write_target(target, value);
+    }
 
     JP = (opcode: number) => {
         let jump: boolean = false;
