@@ -450,63 +450,6 @@ export class CPU {
         }
     }
 
-    POP = (opcode: number) => {
-        let registerH: Register;
-        let registerL: Register;
-
-        switch(opcode) {
-            case 0xC1:
-                registerH = Register.B;
-                registerL = Register.C;
-                break;
-            case 0xD1:
-                registerH = Register.D;
-                registerL = Register.E;
-                break;
-            case 0xE1:
-                registerH = Register.H;
-                registerL = Register.L;
-                break;
-            case 0xF1:
-                registerH = Register.A;
-                registerL = Register.F;
-                break;
-        }
-
-        this.write_target(registerL, this.pop_sp());
-        this.write_target(registerH, this.pop_sp());
-    }
-
-    PUSH = (opcode: number) => {
-        let registerH: Register;
-        let registerL: Register;
-
-        switch(opcode) {
-            case 0xC5:
-                registerH = Register.B;
-                registerL = Register.C;
-                break;
-            case 0xD5:
-                registerH = Register.D;
-                registerL = Register.E;
-                break;
-            case 0xE5:
-                registerH = Register.H;
-                registerL = Register.L;
-                break;
-            case 0xF5:
-                registerH = Register.A;
-                registerL = Register.F;
-                break;
-        }
-
-        // extra internal delay?
-        this.timer += 4;
-
-        this.push_sp(this.read_target(registerH));
-        this.push_sp(this.read_target(registerL));
-    }
-
     ADD = (opcode: number) => {
         if (opcode < 0x40) {
             let hl = (this.registers.H << 8) + this.registers.L;
@@ -849,9 +792,55 @@ export class CPU {
     SET = (extended_opcode: number) => {}
     RES = (extended_opcode: number) => {}
 
-    JP = (opcode: number) => {}
+    JP = (opcode: number) => {
+        let jump: boolean = false;
+
+        switch(opcode) {
+            case 0xC2:
+                jump = !this.get_flag(Flag.Z);
+                break;
+            case 0xC3:
+                jump = true;
+                break;
+            case 0xCA:
+                jump = this.get_flag(Flag.Z);
+                break;
+            case 0xD2:
+                jump = !this.get_flag(Flag.C);
+                break;
+            case 0xDA:
+                jump = this.get_flag(Flag.C);
+                break;                
+            case 0xE9:
+                jump = true;
+                break;                
+        }
+        
+
+        let addr_high: number;
+        let addr_low: number;
+
+        if (opcode == 0xE9) {
+            addr_high = this.registers.H;
+            addr_low = this.registers.L;
+        } else {
+            addr_high = this.read_inc_pc();
+            addr_low = this.read_inc_pc();
+        }
+
+
+        if (jump) {
+            if (opcode != 0xE9) {
+                // extra internal delay?
+                this.timer += 4;
+            }
+            
+            this.registers.PC = (addr_high << 8) + addr_low;
+        }
+    }
+
     JR = (opcode: number) => {
-        let jump;
+        let jump: boolean = false;
 
         let value = this.read_inc_pc();
 
@@ -881,8 +870,65 @@ export class CPU {
         }
     }
 
+    POP = (opcode: number) => {
+        let registerH: Register;
+        let registerL: Register;
+
+        switch(opcode) {
+            case 0xC1:
+                registerH = Register.B;
+                registerL = Register.C;
+                break;
+            case 0xD1:
+                registerH = Register.D;
+                registerL = Register.E;
+                break;
+            case 0xE1:
+                registerH = Register.H;
+                registerL = Register.L;
+                break;
+            case 0xF1:
+                registerH = Register.A;
+                registerL = Register.F;
+                break;
+        }
+
+        this.write_target(registerL, this.pop_sp());
+        this.write_target(registerH, this.pop_sp());
+    }
+
+    PUSH = (opcode: number) => {
+        let registerH: Register;
+        let registerL: Register;
+
+        switch(opcode) {
+            case 0xC5:
+                registerH = Register.B;
+                registerL = Register.C;
+                break;
+            case 0xD5:
+                registerH = Register.D;
+                registerL = Register.E;
+                break;
+            case 0xE5:
+                registerH = Register.H;
+                registerL = Register.L;
+                break;
+            case 0xF5:
+                registerH = Register.A;
+                registerL = Register.F;
+                break;
+        }
+
+        // extra internal delay?
+        this.timer += 4;
+
+        this.push_sp(this.read_target(registerH));
+        this.push_sp(this.read_target(registerL));
+    }
+
     CALL = (opcode: number) => {
-        let jump;
+        let jump: boolean = false;
 
         let addr_high = this.read_inc_pc();
         let addr_low = this.read_inc_pc();
@@ -927,8 +973,47 @@ export class CPU {
         this.registers.PC = (opcode - 0xc7);
     }
 
-    RET = (opcode: number) => {}
-    RETI = (opcode: number) => {}
+    RET = (opcode: number) => {
+        let jump: boolean = false;
+
+        switch(opcode) {
+            case 0xC0:
+                this.timer += 4;
+                jump = !this.get_flag(Flag.Z);
+                break;
+            case 0xC8:
+                this.timer += 4;
+                jump = this.get_flag(Flag.Z);
+                break;
+            case 0xC9:
+                jump = true;
+                break;
+            case 0xD0:
+                this.timer += 4;
+                jump = !this.get_flag(Flag.C);
+                break;
+            case 0xD8:
+                this.timer += 4;
+                jump = this.get_flag(Flag.C);
+                break;
+            case 0xD9:
+                this.set_flag(Flag.IME, true);
+                jump = true;
+                break;
+        }
+        
+        // extra internal delay?
+
+        if (jump) {
+            let addr_low = this.pop_sp();
+            let addr_high = this.pop_sp();
+    
+            // extra internal delay?
+            this.timer += 4;
+    
+            this.registers.PC = (addr_high << 8) + addr_low;
+        }
+    }
     
     // resource: https://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
     opcode_map = [
@@ -972,7 +1057,7 @@ export class CPU {
         this.RET,  this.RET,  this.JP,  this.CB,    this.CALL, this.CALL, this.ADD,  this.RST,   //0xC8-0xCF
 
         this.RET,  this.POP,  this.JP,  this.IDK,   this.CALL, this.PUSH, this.SUB,  this.RST,   //0xD0-0xD7
-        this.RET,  this.RETI, this.JP,  this.IDK,   this.CALL, this.IDK,  this.SUB,  this.RST,   //0xD8-0xDF
+        this.RET,  this.RET,  this.JP,  this.IDK,   this.CALL, this.IDK,  this.SUB,  this.RST,   //0xD8-0xDF
 
         this.LD,   this.POP,  this.LD,  this.IDK,   this.IDK,  this.PUSH, this.AND,  this.RST,   //0xE0-0xE7
         this.ADD,  this.JP,   this.LD,  this.IDK,   this.IDK,  this.IDK,  this.XOR,  this.RST,   //0xE8-0xEF
