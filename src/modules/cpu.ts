@@ -245,12 +245,6 @@ export class CPU {
         }                    
     }
 
-    /* gb cpu manual - by DP */
-    CB = (opcode: number) => {
-        let extended_opcode: number = this.read_inc_pc();
-        this.cb_map[extended_opcode >> 3](extended_opcode);
-    }
-
     IDK = (opcode: number) => {
         // TODO - implement invalid instructions. Just halt?
     }
@@ -696,8 +690,6 @@ export class CPU {
         }
     }
 
-    SWAP = (opcode: number) => {}
-
     DAA = (opcode: number) => {
         if (!this.get_flag(Flag.N)){
             if (this.registers.A > 0x99 || this.get_flag(Flag.C)) {
@@ -748,6 +740,16 @@ export class CPU {
         this.set_flag(Flag.C, c == 1);
     }
 
+    RRCA = (opcode: number) => {
+        let c = this.registers.A & 0x01;
+        this.registers.A = ((this.registers.A & 0xFE) >> 1) + (c << 7);
+
+        this.set_flag(Flag.Z, false);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c == 1);
+    }
+
     RLA = (opcode: number) => {
         let c_old = this.get_flag(Flag.C) ? 1 : 0;
         let c_new = this.registers.A >> 7;
@@ -759,16 +761,6 @@ export class CPU {
         this.set_flag(Flag.C, c_new == 1);
     }
 
-    RRCA = (opcode: number) => {
-        let c = this.registers.A & 0x01;
-        this.registers.A = ((this.registers.A & 0xFE) >> 1) + (c << 7);
-
-        this.set_flag(Flag.Z, false);
-        this.set_flag(Flag.N, false);
-        this.set_flag(Flag.H, false);
-        this.set_flag(Flag.C, c == 1);
-    }
-
     RRA = (opcode: number) => {
         let c_old = this.get_flag(Flag.C) ? 1 : 0;
         let c_new = this.registers.A & 0x01;
@@ -778,45 +770,6 @@ export class CPU {
         this.set_flag(Flag.N, false);
         this.set_flag(Flag.H, false);
         this.set_flag(Flag.C, c_new == 1);
-    }
-
-    RL = (extended_opcode: number) => {}
-    RLC = (extended_opcode: number) => {}
-    RR = (extended_opcode: number) => {}
-    RRC = (extended_opcode: number) => {}
-    SLA = (extended_opcode: number) => {}
-    SRA = (extended_opcode: number) => {}
-    SRL = (extended_opcode: number) => {}
-
-    BIT = (extended_opcode: number) => {
-        let bit = (extended_opcode - 0x40) >>> 3;
-        let bit_mask = 1 << bit;
-        let target: Target  = byte_to_target[extended_opcode & 0xF];
-        let value = this.read_target(target)
-
-        this.set_flag_z(value & bit_mask);
-        this.set_flag(Flag.N, false);
-        this.set_flag(Flag.H, true);
-    }
-
-    RES = (extended_opcode: number) => {
-        let bit = (extended_opcode - 0x80) >>> 3;
-        let bit_mask = 0xFF ^ (1 << bit);
-        let target: Target  = byte_to_target[extended_opcode & 0xF];
-
-        let value = this.read_target(target)
-        value = value & bit_mask;
-        this.write_target(target, value);
-    }
-
-    SET = (extended_opcode: number) => {
-        let bit = (extended_opcode - 0xC0) >>> 3;
-        let bit_mask = 1 << bit;
-        let target: Target  = byte_to_target[extended_opcode & 0xF];
-        
-        let value = this.read_target(target)
-        value = value | bit_mask;
-        this.write_target(target, value);
     }
 
     JP = (opcode: number) => {
@@ -1040,6 +993,163 @@ export class CPU {
     
             this.registers.PC = (addr_high << 8) + addr_low;
         }
+    }
+
+    CB = (opcode: number) => {
+        let extended_opcode: number = this.read_inc_pc();
+        this.cb_map[extended_opcode >> 3](extended_opcode);
+    }
+
+    RLC = (extended_opcode: number) => {
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
+        let value = this.read_target(target);
+
+        let c = value >> 7;
+        value = ((value & 0x7F) << 1) + c;
+
+        this.write_target(target, value);
+
+        this.set_flag_z(value);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c == 1);
+    }
+
+    RRC = (extended_opcode: number) => {
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
+        let value = this.read_target(target);
+
+        let c = value & 0x01;
+        value = ((value & 0xFE) >> 1) + (c << 7);
+
+        this.write_target(target, value);
+        
+        this.set_flag_z(value);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c == 1);
+    }
+
+    RL = (extended_opcode: number) => {
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
+        let value = this.read_target(target);
+
+        let c_old = this.get_flag(Flag.C) ? 1 : 0;
+        let c_new = value >> 7;
+        value = ((value & 0x7F) << 1) + c_old;
+
+        this.write_target(target, value);
+        
+        this.set_flag_z(value);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c_new == 1);
+    }
+
+    RR = (extended_opcode: number) => {
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
+        let value = this.read_target(target);
+        
+        let c_old = this.get_flag(Flag.C) ? 1 : 0;
+        let c_new = value & 0x01;
+        value = ((value & 0xFE) >> 1) + (c_old << 7);
+
+        this.write_target(target, value);
+
+        this.set_flag_z(value);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c_new == 1);
+    }
+
+    SLA = (extended_opcode: number) => {
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
+        let value = this.read_target(target);
+
+        let c = value >> 7;
+        value = (value << 1) & 0xFF;
+
+        this.write_target(target, value);
+
+        this.set_flag_z(value);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c == 1);
+    }
+
+    SRA = (extended_opcode: number) => {
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
+        let value = this.read_target(target);
+
+        let c = value & 0x1;
+        value = (value & 0x80) | (value >> 1);
+
+        this.write_target(target, value);
+
+        this.set_flag_z(value);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c == 1);
+    }
+
+    SRL = (extended_opcode: number) => {
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
+        let value = this.read_target(target);
+
+        let c = value & 0x1;
+        value = value >> 1;
+
+        this.write_target(target, value);
+
+        this.set_flag_z(value);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, c == 1);
+    }
+
+    SWAP = (extended_opcode: number) => {
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
+        let value = this.read_target(target);
+
+        value = ((value & 0x0F) << 4) | ((value & 0xF0) >> 4)
+
+        this.write_target(target, value);
+
+        this.set_flag_z(value);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, false);
+        this.set_flag(Flag.C, false);        
+    }
+
+    BIT = (extended_opcode: number) => {
+        let bit = (extended_opcode - 0x40) >>> 3;
+        let bit_mask = 1 << bit;
+        let target: Target  = byte_to_target[extended_opcode & 0xF];
+        let value = this.read_target(target)
+
+        this.set_flag_z(value & bit_mask);
+        this.set_flag(Flag.N, false);
+        this.set_flag(Flag.H, true);
+    }
+
+    RES = (extended_opcode: number) => {
+        let bit = (extended_opcode - 0x80) >>> 3;
+        let bit_mask = 0xFF ^ (1 << bit);
+        let target: Target  = byte_to_target[extended_opcode & 0xF];
+
+        let value = this.read_target(target)
+        value = value & bit_mask;
+        this.write_target(target, value);
+    }
+
+    SET = (extended_opcode: number) => {
+        let bit = (extended_opcode - 0xC0) >>> 3;
+        let bit_mask = 1 << bit;
+        let target: Target  = byte_to_target[extended_opcode & 0xF];
+        
+        let value = this.read_target(target)
+        value = value | bit_mask;
+        this.write_target(target, value);
     }
     
     // resource: https://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
