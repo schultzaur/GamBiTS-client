@@ -505,15 +505,57 @@ export class CPU {
     }
 
     AND = (opcode: number) => {
+        let value: number;
 
-    }
-    
-    OR = (opcode: number) => {
+        if (opcode < 0xB0) {
+            let target: Target = byte_to_target[opcode - 0xA0];
+            value = this.read_target(target);
+        } else {
+            value = this.read_inc_pc();
+        }
+        
+        this.registers.A &= value;
 
+        this.set_flag_z(this.registers.A);
+        this.flags.N = 0;
+        this.flags.H = H_true;
+        this.flags.C = 0;
     }
     
     XOR = (opcode: number) => {
+        let value: number;
+
+        if (opcode < 0xB0) {
+            let target: Target = byte_to_target[opcode - 0xA8];
+            value = this.read_target(target);
+        } else {
+            value = this.read_inc_pc();
+        }
         
+        this.registers.A ^= value;
+
+        this.set_flag_z(this.registers.A);
+        this.flags.N = 0;
+        this.flags.H = 0;
+        this.flags.C = 0;
+    }
+    
+    OR = (opcode: number) => {
+        let value: number;
+
+        if (opcode < 0xC0) {
+            let target: Target = byte_to_target[opcode - 0xB0];
+            value = this.read_target(target);
+        } else {
+            value = this.read_inc_pc();
+        }
+        
+        this.registers.A |= value;
+
+        this.set_flag_z(this.registers.A);
+        this.flags.N = 0;
+        this.flags.H = 0;
+        this.flags.C = 0;
     }
 
     CP = (opcode: number) => {

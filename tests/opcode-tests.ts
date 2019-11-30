@@ -805,6 +805,69 @@ test('Basic', function() {
     )
 });
 
+suite('0xA0 AND B');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xA0],
+        { [Register.A]: 0x5A, [Register.B]: 0x3F },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 0x1A },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: 0},
+        {},
+    )
+});
+
+suite('0xA8 XOR B');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xA8],
+        { [Register.A]: 0xFF, [Register.B]: 0x0F },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 0xF0 },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0},
+        {},
+    )
+});
+
+suite('0xB0 OR B');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xB0],
+        { [Register.A]: 0x5A, [Register.B]: 0x03 },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 0x5B },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0},
+        {},
+    )
+});
+
 suite('0xB8 CP B');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -954,6 +1017,27 @@ test('Basic', function() {
     );
 });
 
+suite('0xE6 AND d8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xE6, 0x3F],
+        { [Register.A]: 0x5A, },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        8,
+        { [Register.A]: 0x1A },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: 0},
+        {},
+    )
+});
+
 suite('0xE8 ADD SP,r8');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -1016,6 +1100,27 @@ test('Basic', function() {
         {},
         { 0xC010: 0x12 }
     );
+});
+
+suite('0xEE XOR d8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xEE, 0x0F],
+        { [Register.A]: 0xFF, },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        8,
+        { [Register.A]: 0xF0 },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0},
+        {},
+    )
 });
 
 suite('0xF0 LDH A,(a8)');
@@ -1168,6 +1273,27 @@ test('Basic', function() {
         {},
         {},
     );
+});
+
+suite('0xF6 OR d8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xF6, 0x03],
+        { [Register.A]: 0x5A, },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        8,
+        { [Register.A]: 0x5B },
+        { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: 0, [Flag.C]: 0},
+        {},
+    )
 });
 
 suite('0xFB EI');
