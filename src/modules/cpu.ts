@@ -31,7 +31,8 @@ export const enum Flag {
     Z = "Z", // Zero
     N = "N", // Subtract
     H = "H", // Half-carry
-    C = "C" // Carry
+    C = "C", // Carry
+    IME = "IME", // Interupt Master Enable
 }
 
 export const Flags: Flag[] = [
@@ -39,6 +40,7 @@ export const Flags: Flag[] = [
     Flag.N,
     Flag.H,
     Flag.C,
+    Flag.IME,
 ]
 
 type Target = Register | "(HL)";
@@ -58,7 +60,10 @@ export class CPU {
     registers: { -readonly [key in keyof typeof Register]: number }
     flags: { -readonly [key in keyof typeof Flag]: number }
     timer: number;
+    halted: boolean;
+    stopped: boolean;
 
+    enable_ime: boolean;
     constructor()
     {
         this.memory = new Memory();
@@ -66,6 +71,9 @@ export class CPU {
         this.registers = {} as any
         this.flags = {} as any
         this.timer = 0;
+        this.enable_ime = false;
+        this.halted = false;
+        this.stopped = false;
 
         for (var register of Registers) {
             this.registers[register] = 0;
@@ -89,6 +97,9 @@ export class CPU {
         }
         
         cpu.timer = this.timer;
+        cpu.enable_ime = this.enable_ime;
+        cpu.halted;
+        cpu.stopped;
 
         // TODO: Memory/etc?
 
@@ -96,7 +107,24 @@ export class CPU {
     }
 
     step: () => void = () => {
+        if (this.stopped) {
+            return;
+        }
+
+        if (this.halted) {
+            this.timer += 4;
+            // todo: handle interrupts
+            return;
+        }
+        
         let opcode: number = this.read_inc_pc();
+
+        if (this.enable_ime) {
+            // TODO: figure out how tf EI/DI/etc work. Possible different for CGB.
+            this.flags.IME = 1;
+            this.enable_ime = false;
+        }
+
         this.opcode_map[opcode](opcode);
     }
 
@@ -195,19 +223,27 @@ export class CPU {
     NOP = (opcode: number) => { }
     
     HALT = (opcode: number) => {
-        // TODO - implement HALT
+        if (this.flags.IME == 0 && (this.memory.IE & this.memory.IF) > 0) {
+            // weird halt bug... don't increment PC.
+            let opcode = this.memory.read(this.registers.PC);
+            this.timer += 4; 
+            this.opcode_map[opcode](opcode);
+            console.log(this.registers.PC);
+        } else {
+            this.halted = true;
+        }
     }
 
     STOP = (opcode: number) => {
-        // TODO - implement HALT
-        
+        this.stopped = true;
     }
 
     DI = (opcode: number) => {
-        // TODO - implement interrupts
+        this.flags.IME = 1;
     }
+
     EI = (opcode: number) => {
-        // TODO - implement interrupts
+        this.enable_ime = true;
     }
 
     LD = (opcode: number) => {

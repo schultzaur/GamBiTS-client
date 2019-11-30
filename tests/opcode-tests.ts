@@ -1,4 +1,4 @@
-import { CPU, Flag, Register, Z_true, N_true, H_true, C_true } from './../src/modules/cpu.js';
+import { CPU, Flag, Register, Z_true, N_true, H_true, C_true, Flags } from './../src/modules/cpu.js';
 import { assertEqual, assertState, setupTest } from './test-helpers.js';
 
 // NOP test also servers as template for other tests.
@@ -374,6 +374,8 @@ test('Basic', function() {
         {},
         {},
     );
+
+    assertEqual(true, cpu.stopped, "stopped");
 });
 
 suite('0x17 RLA');
@@ -640,6 +642,63 @@ test('Basic', function() {
     );
 });
 
+suite('0x76 HALT');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x76],
+        {},
+        {},
+        {},
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        {},
+        {},
+        {},
+    );
+
+    assertEqual(true, cpu.halted, "halted");
+});
+test('Duplicate Instruction Bug', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x76, 0x3C /* INC A */],
+        {},
+        {},
+        { 0xFF0F: 0x01, 0xFFFF: 0x01 },
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        8,
+        { [Register.A]: 1 },
+        {},
+        {},
+    );
+
+    snapshot = cpu.snapshot();
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 2 },
+        {},
+        {},
+    );
+});
+
 suite('0x77 LD (HL),A');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -856,6 +915,28 @@ test('Basic', function() {
     );
 });
 
+suite('0xF3 DI');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xF3],
+        {},
+        { [Flag.IME]: 1 },
+        {}
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        {},
+        { [Flag.IME]: 1 },
+        {},
+    );
+});
+
 suite('0xF8 LD HL,SP+r8');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -877,7 +958,6 @@ test('Basic', function() {
         {},
     );
 });
-
 test('Subtract', function() {
     var [cpu, snapshot] = setupTest(
         [0xF8, 0xf0],
@@ -941,4 +1021,42 @@ test('Basic', function() {
         {},
         {},
     );
+});
+suite('0xFB EI');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xFB, 0x00],
+        {},
+        { [Flag.IME]: 0},
+        {},
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        {},
+        { [Flag.IME]: 0 },
+        {},
+    );
+
+    assertEqual(true, cpu.enable_ime, "enable_ime");
+
+    snapshot = cpu.snapshot();
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        {},
+        { [Flag.IME]: 1 },
+        {},
+    );
+
+    assertEqual(false, cpu.enable_ime, "enable_ime");
 });

@@ -48,6 +48,9 @@ export default class Memory {
     externalRamEnabled: boolean;
     highRam: number[];
     mbcMode: MBCMode;
+    
+    IE: number;
+    IF: number;
 
     constructor()
     {
@@ -60,6 +63,8 @@ export default class Memory {
         this.externalRamBank = 0;
         this.externalRamEnabled = false;
         this.highRam = [];
+        this.IE = 0;
+        this.IF = 0;
 
         this.mbcMode = MBCMode.ROM;
     }
@@ -96,11 +101,15 @@ export default class Memory {
         } else if (address < 0xFF00) {
             value = 0;
         } else if (address < 0xFF80) {
-            // IO stuff
+            switch (address) {
+                case 0xFF0F:
+                    value = this.IF & 0x1F;
+                    break;
+            }
         } else if (address < 0xFFFF) {
             value = this.highRam[address - 0xFF80];
         } else {
-            // interupt enable?
+            value = this.IE & 0x1F;
         }
 
         return (value || 0) & 0xff;
@@ -151,11 +160,15 @@ export default class Memory {
         } else if (address < 0xFF00) {
             // no-op
         } else if (address < 0xFF80) {
-            // IO stuff
+            switch (address) {
+                case 0xFF0F:
+                    this.IF = value;
+                    break;
+            }
         } else if (address < 0xFFFF) {
             this.highRam[address - 0xFF80] = value;
         } else {
-            // interupt enable
+            this.IE = value;
         }
     }
 }

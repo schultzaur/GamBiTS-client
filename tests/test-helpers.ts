@@ -1,13 +1,18 @@
 import { CPU, Flag, Flags, Register, Registers } from './../src/modules/cpu.js';
 
 export function assertEqual(
-    expected: number,
-    actual: number,
+    expected: number | boolean,
+    actual: number | boolean,
     name: string
 ) {
-    if (expected != actual)
-    {
-        throw new Error(`Unexpected value for <${name}>. Expected: <0x${expected.toString(16)}>, actual: <0x${actual.toString(16)}>.`);
+    if (typeof expected === "number") {
+        if (expected != actual) {
+            throw new Error(`Unexpected value for <${name}>. Expected: <0x${expected.toString(16)}>, actual: <0x${actual.toString(16)}>.`);
+        }
+    } else if (typeof expected === "boolean") {
+        if (expected != actual) {
+            throw new Error(`Unexpected value for <${name}>. Expected: <0x${expected}>, actual: <0x${actual}>.`);
+        }
     }
 }
 
