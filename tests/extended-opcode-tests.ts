@@ -84,7 +84,7 @@ test('Basic', function() {
         cpu,
         snapshot,
         snapshot.registers.PC + 2,
-        8
+        8,
         { [Register.B]: 0xE1 },
         { [Flag.C]: false },
         {},
