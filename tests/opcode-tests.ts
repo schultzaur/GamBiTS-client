@@ -910,6 +910,27 @@ test('Basic', function() {
     )
 });
 
+suite('0xC4 CALL NZ,a16');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xC4, 0x12, 0x34],
+        { [Register.SP]: 0xFFFE },
+        { [Flag.Z]: false },
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        0x1234,
+        24,
+        { [Register.SP]: 0xFFFC, },
+        {},
+        { 0xFFFC: 0x03, 0xFFFD: 0x01 },
+    )
+});
+
 suite('0xC5 PUSH BC');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -952,6 +973,69 @@ test('Basic', function() {
     )
 });
 
+suite('0xC7 RST 00H');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xC7],
+        { [Register.SP]: 0xFFFE },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        0x00,
+        16,
+        { [Register.SP]: 0xFFFC, },
+        {},
+        { 0xFFFC: 0x01, 0xFFFD: 0x01 },
+    )
+});
+
+suite('0xCC CALL Z,a16');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xCC, 0x12, 0x34],
+        { [Register.SP]: 0xFFFE },
+        { [Flag.Z]: false },
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 3,
+        12,
+        {},
+        {},
+        {},
+    )
+});
+
+suite('0xCD CALL a16');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xCD, 0x12, 0x34],
+        { [Register.SP]: 0xFFFE },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        0x1234,
+        24,
+        { [Register.SP]: 0xFFFC, },
+        {},
+        { 0xFFFC: 0x03, 0xFFFD: 0x01 },
+    )
+});
+
 suite('0xCE ADC A,d8');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -973,6 +1057,26 @@ test('Basic', function() {
     )
 });
 
+suite('0xCF RST 08H');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xCF],
+        { [Register.PC]: 0x101, [Register.SP]: 0xFFFE },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        0x08,
+        16,
+        { [Register.SP]: 0xFFFC, },
+        {},
+        { 0xFFFC: 0x02, 0xFFFD: 0x01 },
+    )
+});
 suite('0xD6 SUB d8');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(

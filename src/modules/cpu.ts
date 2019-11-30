@@ -460,8 +460,8 @@ export class CPU {
                 registerL = Register.C;
                 break;
             case 0xD1:
-                registerH = Register.B;
-                registerL = Register.C;
+                registerH = Register.D;
+                registerL = Register.E;
                 break;
             case 0xE1:
                 registerH = Register.H;
@@ -487,8 +487,8 @@ export class CPU {
                 registerL = Register.C;
                 break;
             case 0xD5:
-                registerH = Register.B;
-                registerL = Register.C;
+                registerH = Register.D;
+                registerL = Register.E;
                 break;
             case 0xE5:
                 registerH = Register.H;
@@ -881,8 +881,52 @@ export class CPU {
         }
     }
 
-    CALL = (opcode: number) => {}
-    RST = (opcode: number) => {}
+    CALL = (opcode: number) => {
+        let jump;
+
+        let addr_high = this.read_inc_pc();
+        let addr_low = this.read_inc_pc();
+
+        switch(opcode) {
+            case 0xC4:
+                jump = !this.get_flag(Flag.Z);
+                break;
+            case 0xCC:
+                jump = this.get_flag(Flag.Z);
+                break;
+            case 0xCD:
+                jump = true;
+                break;
+            case 0xD4:
+                jump = !this.get_flag(Flag.C);
+                break;
+            case 0xDC:
+                jump = this.get_flag(Flag.C);
+                break;                
+        }
+
+        if (jump) {
+            // extra internal delay?
+            this.timer += 4;
+
+            this.push_sp(this.registers.PC >> 8);
+            this.push_sp(this.registers.PC & 0xFF);
+            
+            this.registers.PC = (addr_high << 8) + addr_low;
+        }
+
+    }
+
+    RST = (opcode: number) => {
+        this.push_sp(this.registers.PC >> 8);
+        this.push_sp(this.registers.PC & 0xFF);
+
+        // extra internal delay?
+        this.timer += 4;
+        
+        this.registers.PC = (opcode - 0xc7);
+    }
+
     RET = (opcode: number) => {}
     RETI = (opcode: number) => {}
     

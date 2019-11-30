@@ -63,16 +63,17 @@ export function setupTest(
     cpu.memory.hasBoot = true;
     cpu.memory.write(0x0000, 0x0A);
     cpu.registers.PC = 0x100;
-    
-    for (const [index, value] of opcode.entries()) {
-        cpu.memory.externalRom[cpu.registers.PC + index] = value & 0xFF;
-    }
 
     for (let register of Registers) {
         if (register in registers) {
             cpu.registers[register] = registers[register];
         }
     }
+    
+    for (const [index, value] of opcode.entries()) {
+        cpu.memory.externalRom[cpu.registers.PC + index] = value & 0xFF;
+    }
+
     for (let flag of Flags) {
         if (flag in flags) {
             cpu.set_flag(flag, flags[flag]);
