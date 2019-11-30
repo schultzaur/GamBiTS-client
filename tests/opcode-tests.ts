@@ -763,6 +763,69 @@ test('Basic', function() {
     )
 });
 
+suite('0x90 SUB B');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x90],
+        { [Register.A]: 0x3E, [Register.B]: 0x0F },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 0x2F },
+        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: 0},
+        {},
+    )
+});
+
+suite('0x98 SBC A,B');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0x98],
+        { [Register.A]: 0x3B, [Register.B]: 0x4F },
+        { [Flag.C]: C_true },
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { [Register.A]: 0xEB },
+        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: C_true},
+        {},
+    )
+});
+
+suite('0xB8 CP B');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xB8],
+        { [Register.A]: 0x3C, [Register.B]: 0x2F },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 1,
+        4,
+        { },
+        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: 0},
+        {},
+    )
+});
+
 suite('0xC6 ADD A,d8');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -801,6 +864,48 @@ test('Basic', function() {
         8,
         { [Register.A]: 0x02 },
         { [Flag.Z]: 0, [Flag.N]: 0, [Flag.H]: H_true, [Flag.C]: C_true},
+        {},
+    )
+});
+
+suite('0xD6 SUB d8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xD6, 0x0F],
+        { [Register.A]: 0x3E, },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        8,
+        { [Register.A]: 0x2F },
+        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: 0},
+        {},
+    )
+});
+
+suite('0xDE SBC A,d8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xDE, 0x4F],
+        { [Register.A]: 0x3B },
+        { [Flag.C]: C_true },
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        8,
+        { [Register.A]: 0xEB },
+        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: C_true},
         {},
     )
 });
@@ -846,6 +951,48 @@ test('Basic', function() {
         {},
         {},
         { 0xFF90: 0x12 }
+    );
+});
+
+suite('0xE8 ADD SP,r8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xE8, 0x10],
+        { [Register.SP]: 0xC010 },
+        {},
+        {},
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        16,
+        { [Register.SP]: 0xC020 },
+        {},
+        {},
+    );
+});
+test('Subtract', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xE8, 0xF0],
+        { [Register.SP]: 0xC020 },
+        {},
+        {},
+    );
+
+    cpu.step();
+    
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        16,
+        { [Register.SP]: 0xC010 },
+        { [Flag.C]: C_true },
+        {},
     );
 });
 
@@ -1022,6 +1169,7 @@ test('Basic', function() {
         {},
     );
 });
+
 suite('0xFB EI');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
@@ -1059,4 +1207,25 @@ test('Basic', function() {
     );
 
     assertEqual(false, cpu.enable_ime, "enable_ime");
+});
+
+suite('0xFE CP d8');
+test('Basic', function() {
+    var [cpu, snapshot] = setupTest(
+        [0xFE,  0x2F],
+        { [Register.A]: 0x3C, },
+        {},
+        {},
+    );
+    
+    cpu.step();
+    assertState(
+        cpu,
+        snapshot,
+        snapshot.registers.PC + 2,
+        8,
+        {},
+        { [Flag.Z]: 0, [Flag.N]: N_true, [Flag.H]: H_true, [Flag.C]: 0},
+        {},
+    )
 });

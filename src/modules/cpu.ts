@@ -228,7 +228,6 @@ export class CPU {
             let opcode = this.memory.read(this.registers.PC);
             this.timer += 4; 
             this.opcode_map[opcode](opcode);
-            console.log(this.registers.PC);
         } else {
             this.halted = true;
         }
@@ -448,7 +447,7 @@ export class CPU {
             this.registers.H = hl >> 8;
             this.registers.L = hl & 0xFF;
             this.timer += 4;
-        } else {
+        } else if (opcode < 0xD0) {
             let carry = ((opcode & 0xF) >= 0x8) && this.flags.C == C_true;
             let value;
 
@@ -466,15 +465,72 @@ export class CPU {
             this.registers.A = (this.registers.A + value + (carry ? 1 : 0)) & 0xFF;
 
             this.set_flag_z(this.registers.A);
+        } else {
+            let value = this.read_inc_pc();
+
+            let signed = (value & 0x7F) - (value & 0x80);
+            
+            this.flags.Z = 0;
+            this.flags.N = 0;
+            this.set_flag_h_8(this.registers.SP, signed);
+            this.set_flag_c_8(this.registers.SP, signed);
+
+            this.registers.SP = this.registers.SP + signed;
+
+            // extra internal delay
+            // see: (https://github.com/Gekkio/mooneye-gb/blob/9e4ba5e40ca0513edb04d8c9f2b1ca03620ac40b/docs/accuracy.markdown)
+            this.timer += 4;
+            this.timer += 4;
         }
     }
 
-    SUB = (opcode: number) => {}
+    SUB = (opcode: number) => {
+        let carry = ((opcode & 0xF) >= 0x8) && this.flags.C == C_true ? 1 : 0;
+        let value;
 
-    AND = (opcode: number) => {}
-    OR = (opcode: number) => {}
-    XOR = (opcode: number) => {}
-    CP = (opcode: number) => {}
+        if (opcode < 0xA0) {
+            let target: Target = byte_to_target[(opcode - 0x80) % 8];
+            value = this.read_target(target);
+        } else {
+            value = this.read_inc_pc();
+        }
+        
+        this.flags.N = N_true;
+        this.flags.H = ((value & 0xF) + carry) > (this.registers.A & 0xF) ? H_true : 0
+        this.flags.C = (value + carry) > this.registers.A ? C_true : 0;
+
+        this.registers.A = (this.registers.A - value - carry) & 0xFF;
+
+        this.set_flag_z(this.registers.A);
+    }
+
+    AND = (opcode: number) => {
+
+    }
+    
+    OR = (opcode: number) => {
+
+    }
+    
+    XOR = (opcode: number) => {
+        
+    }
+
+    CP = (opcode: number) => {
+        let value: number;
+
+        if (opcode < 0xC0) {
+            let target: Target = byte_to_target[opcode - 0xB8];
+            value = this.read_target(target);
+        } else {
+            value = this.read_inc_pc();
+        }
+        
+        this.set_flag_z(this.registers.A - value);
+        this.flags.N = N_true;
+        this.flags.H = (value & 0xF) > (this.registers.A & 0xF) ? H_true : 0
+        this.flags.C = value > this.registers.A ? C_true : 0;
+    }
 
     INC = (opcode: number) => {
         let col = opcode & 0xF;
