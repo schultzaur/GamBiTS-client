@@ -1,10 +1,5 @@
 import { CPU } from "./cpu";
 
-// hrmmm
-// tilemap
-// sprites
-// html canvas with pixel by pixel createimagedata/setimagedata
-
 const enum Modes {
     HBlank = 0b00,
     VBlank = 0b01,
@@ -13,16 +8,38 @@ const enum Modes {
 }
 
 export default class Display {
+    canvas: HTMLCanvasElement;
+    context: CanvasRenderingContext2D;
     cpu: CPU;
     timer: number;
     mode: number;
     scanline: number;
 
-    constructor(cpu: CPU) {
+    frameCount: number;
+
+    constructor(cpu: CPU, canvas: HTMLCanvasElement) {
         this.cpu = cpu;
         this.timer = 0;
         this.mode = Modes.HBlank;
         this.scanline = 0;
+
+        this.frameCount = 0;
+
+        if (canvas !== undefined) {
+            this.canvas = canvas;
+            this.context = canvas.getContext("2d");
+        }
+    }
+
+    updateCanvas = () => {
+        let width = this.context.measureText(this.frameCount.toString()).width;
+        let height = parseInt(this.context.font, 10);
+        this.context.fillStyle = "#FFF";
+        this.context.fillRect(this.canvas.width - width, this.canvas.height - height, width, height);
+        this.context.fillStyle = "#000";
+        this.context.fillText(this.frameCount.toString(), this.canvas.width - width, this.canvas.height);
+
+        this.frameCount++;
     }
   
     step = () => {
@@ -35,6 +52,7 @@ export default class Display {
                     this.scanline += 1;
                     
                     if (this.scanline >= 144) {
+                        this.updateCanvas();
                         this.mode = Modes.VBlank;
                     } else {
                         this.mode = Modes.OAM;
@@ -66,12 +84,6 @@ export default class Display {
                 break;
 
         }
-        // STAT:
-        //  00: hblank
-        //  01: vblank
-        //  OAM
-        //  OAM + Display Ram
-
     }
 
     read = (address: number) => {

@@ -85,11 +85,11 @@ export class CPU {
     IE: number;
     IF: number;
 
-    constructor()
+    constructor(canvas?: HTMLCanvasElement)
     {
         this.memory = new Memory(this);
         this.timer = new Timer(this);
-        this.display = new Display(this);
+        this.display = new Display(this, canvas);
         this.sound = new Sound(this);
         this.serial = new Serial(this);
         this.joypad = new Joypad(this);

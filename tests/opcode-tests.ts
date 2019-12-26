@@ -27,7 +27,7 @@ test('Basic', function() {
 suite('0x01 LD BC,d16');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0x01, 0xC0, 0x10],
+        [0x01, 0x10, 0xC0],
         {},
         {},
         {},
@@ -129,7 +129,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.B]: 0x11 },
-        { [Flag.N]: true, [Flag.H]: true, },
+        { [Flag.Z]: false, [Flag.N]: true, [Flag.H]: false, },
         {},
     )
 });
@@ -181,7 +181,7 @@ test('Basic', function() {
 suite('0x08 LD (a16),SP');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0x08, 0xC0, 0x10],
+        [0x08, 0x10, 0xC0],
         { [Register.SP]: 0xFFFE },
         {},
         {},
@@ -305,7 +305,7 @@ test('Basic', function() {
         snapshot.registers.PC + 1,
         4,
         { [Register.C]: 0x11 },
-        { [Flag.N]: true, [Flag.H]: true, },
+        { [Flag.Z]: false, [Flag.N]: true, [Flag.H]: false, },
         {},
     )
 });
@@ -934,7 +934,7 @@ test('Basic', function() {
 suite('0xC2 JP NZ,a16');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0xC2, 0x12, 0x34],
+        [0xC2, 0x34, 0x12],
         {},
         { [Flag.Z]: false },
         {},
@@ -955,7 +955,7 @@ test('Basic', function() {
 suite('0xC3 JP a16');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0xC3, 0x12, 0x34],
+        [0xC3, 0x34, 0x12],
         {},
         {},
         {},
@@ -976,7 +976,7 @@ test('Basic', function() {
 suite('0xC4 CALL NZ,a16');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0xC4, 0x12, 0x34],
+        [0xC4, 0x34, 0x12],
         { [Register.SP]: 0xFFFE },
         { [Flag.Z]: false },
         {},
@@ -1144,7 +1144,7 @@ test('Basic', function() {
 suite('0xCD CALL a16');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0xCD, 0x12, 0x34],
+        [0xCD, 0x34, 0x12],
         { [Register.SP]: 0xFFFE },
         {},
         {},
@@ -1376,7 +1376,7 @@ test('Basic', function() {
 suite('0xEA LD (a16),A');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0xEA, 0xC0, 0x10],
+        [0xEA, 0x10, 0xC0],
         { [Register.A]: 0x12 },
         {},
         {},
@@ -1549,7 +1549,7 @@ test('Basic', function() {
 suite('0xFA LD A,(a16)');
 test('Basic', function() {
     var [cpu, snapshot] = setupTest(
-        [0xFA, 0xC0, 0x10],
+        [0xFA, 0x10, 0xC0],
         {},
         {},
         { 0xC010: 0x12 },

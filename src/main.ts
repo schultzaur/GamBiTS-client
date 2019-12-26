@@ -1,10 +1,11 @@
-import { CPU } from './modules/cpu.js';
+import { CPU, Z_true } from './modules/cpu.js';
 import { Debug, updateDebug } from './modules/debug.js';
 
 declare global {
     interface Window { 
         GamBiTS2: { 
             cpu: CPU,
+            canvas: HTMLCanvasElement,
             debug: Debug,
             running: boolean,
         }
@@ -34,9 +35,10 @@ export function create(
         context.drawImage(image, -40, 10);
     }
     
-    var cpu = new CPU();
+    var cpu = new CPU(canvas);
     window.GamBiTS2 = {
         cpu: cpu,
+        canvas: canvas,
         debug: {
             registerAF: document.getElementById("debug-registers-AF") as HTMLInputElement,
             registerBC: document.getElementById("debug-registers-BC") as HTMLInputElement,
@@ -60,6 +62,7 @@ export function create(
     document.getElementById("startButton").addEventListener("click", async (e:Event) => await start())
     document.getElementById("stopButton").addEventListener("click", (e:Event) => stop())
     document.getElementById("skipBootButton").addEventListener("click", (e:Event) => skipBoot())
+    document.getElementById("frameButton").addEventListener("click", (e:Event) => runUntilNextFrame())
 }
 
 function loadFile() {
@@ -70,7 +73,7 @@ function loadFile() {
     fileReader.readAsArrayBuffer(file);
 
     function loadEmulatorROM() {
-        window.GamBiTS2.cpu = new CPU();
+        window.GamBiTS2.cpu = new CPU(window.GamBiTS2.canvas);
         window.GamBiTS2.cpu.memory.loadRom(new Int8Array(fileReader.result as ArrayBuffer));
         updateDebug(window.GamBiTS2.cpu, window.GamBiTS2.debug);        
     }
@@ -98,6 +101,14 @@ function startInternal() {
         }
             
         setTimeout(startInternal, 0);
+    }
+}
+
+function runUntilNextFrame() {
+    let startingFrame = window.GamBiTS2.cpu.display.frameCount;
+
+    while (window.GamBiTS2.cpu.display.frameCount < startingFrame + 1) {
+        window.GamBiTS2.cpu.step();        
     }
 }
 
