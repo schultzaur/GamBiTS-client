@@ -1,3 +1,5 @@
+import { CPU } from "./cpu";
+
 // implement functions to read/write bytes, and the arrays of memory, and also load a rom
 
 // Rom from: https://gbdev.gg8.se/wiki/articles/Gameboy_Bootstrap_ROM#Contents_of_the_ROM
@@ -38,33 +40,32 @@ const enum MBCMode {
 }
 
 export default class Memory {
+    cpu: CPU;
     hasBoot: boolean;
     workRam: number[];
     videoRam: number[];
-    externalRom: number[];
+    oam: number[];
+    externalRom: Int8Array;
     externalRomBank: number;
-    externalRam: number[]
+    externalRam: number[];
     externalRamBank: number;
     externalRamEnabled: boolean;
     highRam: number[];
     mbcMode: MBCMode;
-    
-    IE: number;
-    IF: number;
 
-    constructor()
+    constructor(cpu: CPU)
     {
+        this.cpu = cpu;
         this.hasBoot = false;
         this.workRam = [];
         this.videoRam = [];
-        this.externalRom = [];
+        this.oam = [];
+        this.externalRom = new Int8Array(2 ** 15);
         this.externalRomBank = 1;
         this.externalRam = [];
         this.externalRamBank = 0;
         this.externalRamEnabled = false;
         this.highRam = [];
-        this.IE = 0;
-        this.IF = 0;
 
         this.mbcMode = MBCMode.ROM;
     }
@@ -72,12 +73,11 @@ export default class Memory {
     // https://gbdev.gg8.se/wiki/articles/Memory_Bank_Controllers
     read(address: number): number
     {
-        address = address & 0xFFFF;
         
         let value: number;
 
         if (address < 0x4000) {
-            if (this.hasBoot && address < 0x100) {
+            if (!this.hasBoot && address < 0x100) {
                 value = BootRom[address];
             } else {
                 value = this.externalRom[address];
@@ -97,19 +97,57 @@ export default class Memory {
         } else if (address < 0xFE00) {
             value = this.workRam[address - 0xE000];
         } else if (address < 0xFEA0) {
-            value = this.videoRam[address - 0xFE00];
+            value = this.oam[address - 0xFE00];
         } else if (address < 0xFF00) {
+            // Undocumented
             value = 0;
         } else if (address < 0xFF80) {
             switch (address) {
-                case 0xFF0F:
-                    value = this.IF & 0x1F;
+                case 0xFF00:
+                    value = this.cpu.joypad.read(address);
                     break;
+
+                case 0xFF01: case 0xFF02:
+                    value = this.cpu.serial.read(address);
+                    break;
+
+                case 0xFF04: case 0xFF05: case 0xFF06: case 0xFF07:
+                    value = this.cpu.timer.read(address);
+                    break;
+
+                case 0xFF0F:
+                    value = this.cpu.IF & 0x1F;
+                    break;
+
+                case 0xFF10: case 0xFF11: case 0xFF12: case 0xFF13: case 0xFF14:
+                case 0xFF16: case 0xFF17: case 0xFF18: case 0xFF19:
+                case 0xFF1A: case 0xFF1B: case 0xFF1C: case 0xFF1D: case 0xFF1E:
+                case 0xFF20: case 0xFF21: case 0xFF22: case 0xFF23:
+                case 0xFF24: case 0xFF25: case 0xFF26:
+                case 0xFF30: case 0xFF31: case 0xFF32: case 0xFF33: case 0xFF34: case 0xFF35: case 0xFF36: case 0xFF37:
+                case 0xFF38: case 0xFF39: case 0xFF3A: case 0xFF3B: case 0xFF3C: case 0xFF3D: case 0xFF3E: case 0xFF3F:
+                    value = this.cpu.sound.read(address);
+                    break;
+                
+                case 0xFF40: case 0xFF41: case 0xFF42: case 0xFF43:
+                case 0xFF44: case 0xFF45: case 0xFF46: case 0xFF47:
+                case 0xFF48: case 0xFF49: case 0xFF4A: case 0xFF4B:
+                case 0xFF4D: case 0xFF4F:
+                case 0xFF51: case 0xFF52: case 0xFF53: case 0xFF54: case 0xFF55:
+                case 0xFF56:
+                case 0xFF68: case 0xFF69: case 0xFF6A: case 0xFF6B: case 0xFF70:
+                    value = this.cpu.display.read(address);
+                    break;
+
+                case 0xFF70: case 0xFF72: case 0xFF73: case 0xFF74:  
+                case 0xFF75: case 0xFF76: case 0xFF77:
+                    // Undocumented?
+                    break;                    
             }
         } else if (address < 0xFFFF) {
             value = this.highRam[address - 0xFF80];
-        } else {
-            value = this.IE & 0x1F;
+        } else if (address == 0xFFFF) {
+            value = this.cpu.IE & 0x1F;
         }
 
         return (value || 0) & 0xff;
@@ -156,19 +194,60 @@ export default class Memory {
         } else if (address < 0xFE00) {
             this.workRam[address - 0xE000] = value;
         } else if (address < 0xFEA0) {
-            this.videoRam[address - 0xFE00] = value;
+            this.oam[address - 0xFE00] = value;
         } else if (address < 0xFF00) {
-            // no-op
+            // Undocumented
         } else if (address < 0xFF80) {
             switch (address) {
-                case 0xFF0F:
-                    this.IF = value;
+                case 0xFF00:
+                    this.cpu.joypad.write(address, value);
                     break;
+
+                case 0xFF01: case 0xFF02:
+                    this.cpu.serial.write(address, value);
+                    break;
+
+                case 0xFF04: case 0xFF05: case 0xFF06: case 0xFF07:
+                    this.cpu.timer.write(address, value);
+                    break;
+
+                case 0xFF0F:
+                    this.cpu.IF = value;
+                    break;
+
+                case 0xFF10: case 0xFF11: case 0xFF12: case 0xFF13: case 0xFF14:
+                case 0xFF16: case 0xFF17: case 0xFF18: case 0xFF19:
+                case 0xFF1A: case 0xFF1B: case 0xFF1C: case 0xFF1D: case 0xFF1E:
+                case 0xFF20: case 0xFF21: case 0xFF22: case 0xFF23:
+                case 0xFF24: case 0xFF25: case 0xFF26:
+                case 0xFF30: case 0xFF31: case 0xFF32: case 0xFF33: case 0xFF34: case 0xFF35: case 0xFF36: case 0xFF37:
+                case 0xFF38: case 0xFF39: case 0xFF3A: case 0xFF3B: case 0xFF3C: case 0xFF3D: case 0xFF3E: case 0xFF3F:
+                    this.cpu.sound.write(address, value);
+                    break;
+                
+                case 0xFF40: case 0xFF41: case 0xFF42: case 0xFF43:
+                case 0xFF44: case 0xFF45: case 0xFF46: case 0xFF47:
+                case 0xFF48: case 0xFF49: case 0xFF4A: case 0xFF4B:
+                case 0xFF4D: case 0xFF4F:
+                case 0xFF51: case 0xFF52: case 0xFF53: case 0xFF54: case 0xFF55:
+                case 0xFF56:
+                case 0xFF68: case 0xFF69: case 0xFF6A: case 0xFF6B: case 0xFF70:
+                    this.cpu.display.write(address, value);
+                    break;
+
+                case 0xFF70: case 0xFF72: case 0xFF73: case 0xFF74:  
+                case 0xFF75: case 0xFF76: case 0xFF77:
+                    // Undocumented?
+                    break;                    
             }
         } else if (address < 0xFFFF) {
             this.highRam[address - 0xFF80] = value;
-        } else {
-            this.IE = value;
+        } else if (address == 0xFFFF) {
+            this.cpu.IE = value;
         }
+    }
+
+    loadRom = (rom: Int8Array) => {
+        this.externalRom = rom;
     }
 }

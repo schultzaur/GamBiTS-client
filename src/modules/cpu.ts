@@ -1,5 +1,10 @@
 // Define: registers, clock, etc.
 import Memory from './memory.js';
+import Timer from './timer.js';
+import Display from './display.js';
+import Sound from './sound.js';
+import Serial from './serial.js';
+import Joypad from './joypad.js';
 
 export const enum Register {
     A = "A", F = "F",
@@ -45,8 +50,8 @@ export const Flags: Flag[] = [
 
 const flag_mask = {
     [Flag.Z]: Z_true,
-    [Flag.N]: H_true,
-    [Flag.H]: N_true,
+    [Flag.N]: N_true,
+    [Flag.H]: H_true,
     [Flag.C]: C_true,
 }
 
@@ -64,23 +69,39 @@ const byte_to_target: Target[] = [
 
 export class CPU {
     memory: Memory;
+    timer: Timer;
+    display: Display;
+    sound: Sound;
+    serial: Serial;
+    joypad: Joypad;
+
     registers: { -readonly [key in keyof typeof Register]: number }
-    timer: number;
+    t_clock: number;
     ime: boolean;
     halted: boolean;
     stopped: boolean;
 
     enable_ime: boolean;
+    IE: number;
+    IF: number;
+
     constructor()
     {
-        this.memory = new Memory();
-
+        this.memory = new Memory(this);
+        this.timer = new Timer(this);
+        this.display = new Display(this);
+        this.sound = new Sound(this);
+        this.serial = new Serial(this);
+        this.joypad = new Joypad(this);
+        
         this.registers = {} as any;
-        this.timer = 0;
+        this.t_clock = 0;
         this.enable_ime = false;
         this.ime = false;
         this.halted = false;
         this.stopped = false;
+        this.IE = 0;
+        this.IF = 0;
 
         for (var register of Registers) {
             this.registers[register] = 0;
@@ -95,28 +116,33 @@ export class CPU {
             cpu.registers[register] = this.registers[register];
         }
 
-        cpu.timer = this.timer;
+        cpu.t_clock = this.t_clock;
         cpu.ime = this.ime;
         cpu.enable_ime = this.enable_ime;
         cpu.halted = this.halted;
         cpu.stopped = this.stopped;
 
-        // TODO: Memory/etc?
-
         return cpu;
     }
 
-    step: () => void = () => {
+    step = () => {
         if (this.stopped) {
             return;
         }
 
+        if (this.ime) { 
+            if (this.IE & this.IF) {
+                this.handleInterrupt();
+                return;
+            }
+        }
+
         if (this.halted) {
-            this.timer += 4;
+            this.stepTimer();
             // todo: handle interrupts
             return;
         }
-        
+
         let opcode: number = this.read_inc_pc();
 
         if (this.enable_ime) {
@@ -126,6 +152,37 @@ export class CPU {
         }
 
         this.opcode_map[opcode](opcode);
+    }
+
+    stepTimer = () => {
+        this.t_clock += 4;
+
+        this.timer.step();
+        this.display.step();
+        this.sound.step();
+        this.serial.step();
+        this.joypad.step();
+    }
+
+    handleInterrupt = () => {
+        this.stepTimer(); // IF is actually read twice.
+
+        let interrupt = this.IE & this.IF;
+        let lowestSetBit = interrupt ^ -interrupt;
+        this.IF &= ~lowestSetBit;
+
+        switch(lowestSetBit) {
+            case 1 << 0:
+                this.RST_internal(0x40); //VBlank;
+            case 1 << 1:
+                this.RST_internal(0x48); //STAT;
+            case 1 << 2:
+                this.RST_internal(0x50); //Timer;
+            case 1 << 3:
+                this.RST_internal(0x58); //Serial;
+            case 1 << 4:
+                this.RST_internal(0x60); //Joypad;
+        }
     }
 
     inc_8 = (register: Register) => {
@@ -147,20 +204,20 @@ export class CPU {
     read_inc_pc = () => {
         let value = this.memory.read(this.registers.PC);
         this.inc_16(Register.PC);
-        this.timer += 4;
+        this.stepTimer();
         return value;
     }
 
     push_sp = (value: number) => {
         this.dec_16(Register.SP);
         this.memory.write(this.registers.SP, value);
-        this.timer += 4;
+        this.stepTimer();
     }
 
     pop_sp = () => {
         let value = this.memory.read(this.registers.SP);
         this.inc_16(Register.SP);
-        this.timer += 4;
+        this.stepTimer();
         return value;
     }
 
@@ -226,7 +283,7 @@ export class CPU {
 
         if (target == "(HL)") {
             value = this.memory.read((this.registers[Register.H] << 8) + this.registers[Register.L]);
-            this.timer += 4;
+            this.stepTimer();
         } else {
             value = this.registers[target];
         }         
@@ -237,7 +294,7 @@ export class CPU {
     write_target = (target: Target, value: number) => {
         if (target == "(HL)") {
             this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
-            this.timer += 4;
+            this.stepTimer();
         } else if (target == Register.F) {
             this.registers[target] = value & F_mask;
         } else {
@@ -252,10 +309,10 @@ export class CPU {
     NOP = (opcode: number) => { }
     
     HALT = (opcode: number) => {
-        if (!this.ime && (this.memory.IE & this.memory.IF) > 0) {
+        if (!this.ime && (this.IE & this.IF) > 0) {
             // weird halt bug... don't increment PC.
             let opcode = this.memory.read(this.registers.PC);
-            this.timer += 4; 
+            this.stepTimer(); 
             this.opcode_map[opcode](opcode);
         } else {
             this.halted = true;
@@ -277,56 +334,55 @@ export class CPU {
     LD = (opcode: number) => {
         let row: number = opcode & 0xF0;
         let col: number = opcode & 0x0F;
-
         let high: number = 0;
         let low: number = 0;
         if (opcode < 0x40) {
             switch(col) {
                 case 0x1: // LD xx,d16
-                    high = this.read_inc_pc();
                     low = this.read_inc_pc();
+                    high = this.read_inc_pc();
 
                     switch(row) {
                         case 0x0: 
                             this.registers.B = high;
                             this.registers.C = low;
                             break;
-                        case 0x1:
+                        case 0x10:
                             this.registers.D = high;
                             this.registers.E = low;
                             break;
-                        case 0x2:
+                        case 0x20:
                             this.registers.H = high;
                             this.registers.L = low;
                             break;
-                        case 0x3:                  
+                        case 0x30:
                             this.registers.SP = ((high << 8) + low);
                             break;
                     }
                     break;
                 case 0x2: // LD (xx),A
                     switch(row) {
-                        case 0x0: 
+                        case 0x00: 
                             high = this.registers.B;
                             low =  this.registers.C;
                             break;
-                        case 0x1:
+                        case 0x10:
                             high = this.registers.D;
                             low = this.registers.E;
                             break;
-                        case 0x2:
-                        case 0x3:
+                        case 0x20:
+                        case 0x30:
                             high = this.registers.H;
                             low = this.registers.L;
                             break;
                     }
 
                     this.memory.write((high << 8) + low, this.registers.A);
-                    this.timer += 4;
+                    this.stepTimer();
 
                     if (opcode == 0x22) {
                         this.inc_wrap(Register.H, Register.L);
-                    } else if (opcode == 0x23) {
+                    } else if (opcode == 0x32) {
                         this.dec_wrap(Register.H, Register.L);
                     }
                     break;
@@ -338,44 +394,44 @@ export class CPU {
 
                     if (target == "(HL)") {
                         this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
-                        this.timer += 4;
+                        this.stepTimer();
                     } else {
                         this.registers[target] = value;
                     }                    
                     break;
                 case 0x8: // LD (a16),SP
-                    high = this.read_inc_pc();
                     low = this.read_inc_pc();
+                    high = this.read_inc_pc();
                     let addr = (high << 8) + low;
                     
                     this.memory.write(addr++, this.registers.SP & 0xFF);
-                    this.timer += 4;
+                    this.stepTimer();
                     this.memory.write(addr++, this.registers.SP >> 8);
-                    this.timer += 4;
+                    this.stepTimer();
                     break;
                 case 0xA: // LD A,(xx)
                     switch(row) {
-                        case 0x0:
+                        case 0x00:
                             high = this.registers.B;
                             low =  this.registers.C;
                             break;
-                        case 0x1:
+                        case 0x10:
                             high = this.registers.D;
                             low = this.registers.E;
                             break;
-                        case 0x2:
-                        case 0x3:
+                        case 0x20:
+                        case 0x30:
                             high = this.registers.H;
                             low = this.registers.L;
                             break;
                     }
 
                     this.registers.A = this.memory.read((high << 8) + low);
-                    this.timer += 4;
+                    this.stepTimer();
 
-                    if (opcode == 0xA2) {
+                    if (opcode == 0x2A) {
                         this.inc_wrap(Register.H, Register.L);
-                    } else if (opcode == 0xA3) {
+                    } else if (opcode == 0x3A) {
                         this.dec_wrap(Register.H, Register.L);
                     }
                     break;
@@ -388,14 +444,14 @@ export class CPU {
             
             if (source == "(HL)") {
                 value = this.memory.read((this.registers[Register.H] << 8) + this.registers[Register.L])
-                this.timer += 4;
+                this.stepTimer();
             } else {
                 value = this.registers[source];
             }
 
             if (target == "(HL)") {
                 this.memory.write((this.registers[Register.H] << 8) + this.registers[Register.L], value);
-                this.timer += 4;
+                this.stepTimer();
             } else {
                 this.registers[target] = value;
             }
@@ -415,31 +471,31 @@ export class CPU {
 
             // extra internal delay
             // see: (https://github.com/Gekkio/mooneye-gb/blob/9e4ba5e40ca0513edb04d8c9f2b1ca03620ac40b/docs/accuracy.markdown)
-            this.timer += 4;
+            this.stepTimer();
         } else if (opcode == 0xF9) {
             this.registers.SP = ((this.registers.H << 8) + this.registers.L) & 0xFFFF;
 
             // extra internal delay?
-            this.timer += 4;
+            this.stepTimer();
         } else {
-            if (col == 0x0 || col == 0x2) {
-                high = 0xFF;
-            } else if (col = 0xA) {
-                high = this.read_inc_pc();
-            }
-
             if (col == 0x0 || col == 0xA) {
                 low = this.read_inc_pc();
             } else if (col == 0x02) {
                 low = this.registers.C;
             }
 
+            if (col == 0x0 || col == 0x2) {
+                high = 0xFF;
+            } else if (col = 0xA) {
+                high = this.read_inc_pc();
+            }
+
             if (row == 0xE0) {
                 this.memory.write((high << 8) + low, this.registers.A)
-                this.timer += 4;
+                this.stepTimer();
             } else {
                 this.registers.A = this.memory.read((high << 8) + low)
-                this.timer += 4;
+                this.stepTimer();
             }
         }
     }
@@ -472,7 +528,7 @@ export class CPU {
 
             this.registers.H = hl >> 8;
             this.registers.L = hl & 0xFF;
-            this.timer += 4;
+            this.stepTimer();
         } else if (opcode < 0xD0) {
             let carry = ((opcode & 0xF) >= 0x8) && this.get_flag(Flag.C);
             let value;
@@ -505,8 +561,8 @@ export class CPU {
 
             // extra internal delay
             // see: (https://github.com/Gekkio/mooneye-gb/blob/9e4ba5e40ca0513edb04d8c9f2b1ca03620ac40b/docs/accuracy.markdown)
-            this.timer += 4;
-            this.timer += 4;
+            this.stepTimer();
+            this.stepTimer();
         }
     }
 
@@ -619,29 +675,20 @@ export class CPU {
                     this.inc_16(Register.SP);
                     break;
             }
-            this.timer += 4;
+
+            this.stepTimer();
         } else {
             let target: Target = byte_to_target[opcode >> 3];
+            
+            let value = this.read_target(target);
 
-            let value;
-            if (target == "(HL)") {
-                let addr = (this.registers[Register.H] << 8) + this.registers[Register.L];
-                let value = this.memory.read(addr);
-                this.timer += 4;
-
-                this.set_flag_h_8(value, 1);
-                value = (value + 1) & 0xFF;
-                this.set_flag_z(value);
-                
-                this.memory.write(addr, value);
-                this.timer += 4;
-            } else {
-                this.set_flag_h_8(this.registers[target], 1);
-                this.inc_8(target)
-                this.set_flag_z(this.registers[target]);
-            }
-
+            this.set_flag(Flag.Z, value == 0xFF);
             this.set_flag(Flag.N, false);
+            this.set_flag(Flag.H, (value & 0xF) == 0xF);
+
+            value = (value + 1) & 0xFF;
+
+            this.write_target(target, value);
         }
     }
 
@@ -664,29 +711,19 @@ export class CPU {
                     this.dec_16(Register.SP);
                     break;
             }
-            this.timer += 4;
+            this.stepTimer();
         } else {
             let target: Target = byte_to_target[opcode >> 3];
+            
+            let value = this.read_target(target);
 
-            let value;
-            if (target == "(HL)") {
-                let addr = (this.registers[Register.H] << 8) + this.registers[Register.L];
-                let value = this.memory.read(addr);
-                this.timer += 4;
-
-                this.set_flag_h_8(value, -1);
-                value = (value - 1) & 0xFF;
-                this.set_flag_z(value);
-                
-                this.memory.write(addr, value);
-                this.timer += 4;
-            } else {
-                this.set_flag_h_8(this.registers[target], -1);
-                this.dec_8(target)
-                this.set_flag_z(this.registers[target]);
-            }
-
+            this.set_flag(Flag.Z, value == 0x01);
             this.set_flag(Flag.N, true);
+            this.set_flag(Flag.H, (value & 0xF) == 0x0);
+
+            value = (value - 1) & 0xFF;
+
+            this.write_target(target, value);
         }
     }
 
@@ -796,7 +833,6 @@ export class CPU {
                 break;                
         }
         
-
         let addr_high: number;
         let addr_low: number;
 
@@ -804,15 +840,15 @@ export class CPU {
             addr_high = this.registers.H;
             addr_low = this.registers.L;
         } else {
-            addr_high = this.read_inc_pc();
             addr_low = this.read_inc_pc();
+            addr_high = this.read_inc_pc();
         }
 
 
         if (jump) {
             if (opcode != 0xE9) {
                 // extra internal delay?
-                this.timer += 4;
+                this.stepTimer();
             }
             
             this.registers.PC = (addr_high << 8) + addr_low;
@@ -844,9 +880,8 @@ export class CPU {
 
         if (jump) {
             let signed = (value & 0x7F) - (value & 0x80);
-
             this.registers.PC = (this.registers.PC + signed) & 0xFFFF;
-            this.timer += 4;
+            this.stepTimer();
         }
     }
 
@@ -901,7 +936,7 @@ export class CPU {
         }
 
         // extra internal delay?
-        this.timer += 4;
+        this.stepTimer();
 
         this.push_sp(this.read_target(registerH));
         this.push_sp(this.read_target(registerL));
@@ -910,8 +945,8 @@ export class CPU {
     CALL = (opcode: number) => {
         let jump: boolean = false;
 
-        let addr_high = this.read_inc_pc();
         let addr_low = this.read_inc_pc();
+        let addr_high = this.read_inc_pc();
 
         switch(opcode) {
             case 0xC4:
@@ -933,7 +968,7 @@ export class CPU {
 
         if (jump) {
             // extra internal delay?
-            this.timer += 4;
+            this.stepTimer();
 
             this.push_sp(this.registers.PC >> 8);
             this.push_sp(this.registers.PC & 0xFF);
@@ -944,13 +979,19 @@ export class CPU {
     }
 
     RST = (opcode: number) => {
+        this.RST_internal(opcode - 0xc7);
+    }
+
+    RST_internal = (address: number) => {
+        this.ime = false;
+
         this.push_sp(this.registers.PC >> 8);
         this.push_sp(this.registers.PC & 0xFF);
 
         // extra internal delay?
-        this.timer += 4;
+        this.stepTimer();
         
-        this.registers.PC = (opcode - 0xc7);
+        this.registers.PC = address;
     }
 
     RET = (opcode: number) => {
@@ -958,22 +999,22 @@ export class CPU {
 
         switch(opcode) {
             case 0xC0:
-                this.timer += 4;
+                this.stepTimer();
                 jump = !this.get_flag(Flag.Z);
                 break;
             case 0xC8:
-                this.timer += 4;
+                this.stepTimer();
                 jump = this.get_flag(Flag.Z);
                 break;
             case 0xC9:
                 jump = true;
                 break;
             case 0xD0:
-                this.timer += 4;
+                this.stepTimer();
                 jump = !this.get_flag(Flag.C);
                 break;
             case 0xD8:
-                this.timer += 4;
+                this.stepTimer();
                 jump = this.get_flag(Flag.C);
                 break;
             case 0xD9:
@@ -989,7 +1030,7 @@ export class CPU {
             let addr_high = this.pop_sp();
     
             // extra internal delay?
-            this.timer += 4;
+            this.stepTimer();
     
             this.registers.PC = (addr_high << 8) + addr_low;
         }
@@ -997,7 +1038,7 @@ export class CPU {
 
     CB = (opcode: number) => {
         let extended_opcode: number = this.read_inc_pc();
-        this.cb_map[extended_opcode >> 3](extended_opcode);
+        this. cb_map[extended_opcode >> 3](extended_opcode);
     }
 
     RLC = (extended_opcode: number) => {
@@ -1124,7 +1165,7 @@ export class CPU {
     BIT = (extended_opcode: number) => {
         let bit = (extended_opcode - 0x40) >>> 3;
         let bit_mask = 1 << bit;
-        let target: Target  = byte_to_target[extended_opcode & 0xF];
+        let target: Target = byte_to_target[extended_opcode & 0x7];
         let value = this.read_target(target)
 
         this.set_flag_z(value & bit_mask);
@@ -1135,7 +1176,7 @@ export class CPU {
     RES = (extended_opcode: number) => {
         let bit = (extended_opcode - 0x80) >>> 3;
         let bit_mask = 0xFF ^ (1 << bit);
-        let target: Target  = byte_to_target[extended_opcode & 0xF];
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
 
         let value = this.read_target(target)
         value = value & bit_mask;
@@ -1145,7 +1186,7 @@ export class CPU {
     SET = (extended_opcode: number) => {
         let bit = (extended_opcode - 0xC0) >>> 3;
         let bit_mask = 1 << bit;
-        let target: Target  = byte_to_target[extended_opcode & 0xF];
+        let target: Target  = byte_to_target[extended_opcode & 0x7];
         
         let value = this.read_target(target)
         value = value | bit_mask;

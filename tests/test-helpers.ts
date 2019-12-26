@@ -26,7 +26,7 @@ export function assertState(
     expectedMemory: { [index: number]: number },
 ) {
     assertEqual(expectedPC, currentCpu.registers.PC, `PC`);
-    assertEqual(expectedCycles, currentCpu.timer - previousCpu.timer, `elapsed cycles`);
+    assertEqual(expectedCycles, currentCpu.t_clock - previousCpu.t_clock, `elapsed cycles`);
 
     for (let register of Registers) {
         if (register == Register.PC) {

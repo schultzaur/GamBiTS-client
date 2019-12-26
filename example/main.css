@@ -1,0 +1,77 @@
+#game {
+    display: grid;
+    width: 750px;
+    height: 576px;
+    margin: 0 auto;
+    grid-template-areas: "screen controls";
+    grid-template-rows: 144fr;
+    grid-template-columns: 640px 1fr;
+}
+
+#game > #game-screen {
+    grid-area: screen ;
+    background-color: #cccccc;
+}
+
+#game > #game-screen > canvas {
+    width: 100%;
+    height: 100%;
+}
+
+#game > #game-controls {
+    grid-area: controls;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+
+#debug {
+    display: grid;
+    width: 1024px;
+    height: 512px;
+    margin: 0 auto;
+    grid-template-areas: "registers pc pc"
+                         "registers sp io";
+    grid-template-rows: repeat(2, 1fr);
+    grid-template-columns: 128px 3fr 2fr;
+    font-size: 1.2em;
+    font-family: monospace;
+}
+
+#debug > #debug-registers {
+    grid-area: registers;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+#debug > #debug-registers > div > input[type="text"] {
+    font-family: monospace;
+    font-size: 1.5em;
+}
+
+#debug > #debug-flags {
+    grid-area: flags ;
+    background-color: #ff8cf5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+#debug > #debug-pc {
+    grid-area: pc;
+    background-color: #ffa08c;
+}
+
+#debug > #debug-sp {
+    grid-area: sp;
+    background-color: #ffff64;
+}
+
+#debug > #debug-io {
+    grid-area: io;
+    background-color: #8cffa0;
+}

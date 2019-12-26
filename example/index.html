@@ -2,13 +2,53 @@
 <html lang="en-US">
     <head>
         <meta charset="utf-8" />
+        <link rel="stylesheet" href="main.css">
         <title>Basic GamBiTS client example.</title>
+
+        <script type="module">
+            import { create } from './../out/src/main.js';
+            create(
+                "game",
+                "game-screen",
+                "game-controls",
+                "debug",
+                "debug-registers",
+                "debug-sp",
+                "debug-pc",
+                "debug-io");
+        </script>
     </head>
     <body>
-    <script type="module">
-        import { create } from './../out/src/main.js';
-        let emu = create('emu', document.body);
-        document.getElementById(emu.id).innerHTML = "Test"
-    </script>
+        <div id="game">
+            <div id="game-screen"></div>
+            <div id="game-controls">
+                <input type="file" id="fileInput" value ="Load Rom"> 
+                <input type="button" id="step0x1Button" value="Step 0x1">
+                <input type="button" id="step0x10Button" value="Step 0x10">
+                <input type="button" id="step0x100Button" value="Step 0x100">
+                <input type="button" id="step0x1000Button" value="Step 0x1000">
+                <input type="button" id="startButton" value="Start">
+                <input type="button" id="stopButton" value="Stop">
+                <input type="button" id="skipBootButton" value="Skip Boot">
+            </div>
+        </div>
+
+        <div id="debug">
+            <div id="debug-registers">
+                <div>AF:<input type="text" id="debug-registers-AF" value="0x0000" size=5></div>
+                <div>BC:<input type="text" id="debug-registers-BC" value="0x0000" size=5></div>
+                <div>DE:<input type="text" id="debug-registers-DE" value="0x0000" size=5></div>
+                <div>HL:<input type="text" id="debug-registers-HL" value="0x0000" size=5></div>
+                <div>SP:<input type="text" id="debug-registers-SP" value="0x0000" size=5></div>
+                <div>PC:<input type="text" id="debug-registers-PC" value="0x0000" size=5></div>
+                <div>Z:<input type="checkbox" id="debug-flags-Z"></div>
+                <div>H:<input type="checkbox" id="debug-flags-H"></div>
+                <div>N:<input type="checkbox" id="debug-flags-N"></div>
+                <div>C:<input type="checkbox" id="debug-flags-C"></div>
+            </div>
+            <div id="debug-sp"></div>
+            <div id="debug-pc"></div>
+            <div id="debug-io"></div>
+        </div>
     </body>
 </html>

@@ -1,14 +1,14 @@
 import { CPU } from "./cpu";
 
-export default class Sound {
+export default class Joypad {
     cpu: CPU;
-
+    
     constructor(cpu: CPU) {
         this.cpu = cpu;
     }
 
     step = () => {
-
+        
     }
 
     read = (address: number) => {
