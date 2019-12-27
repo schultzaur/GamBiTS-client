@@ -14,6 +14,7 @@ export default class Display {
     timer: number;
     mode: number;
     scanline: number;
+    imageData: ImageData;
 
     frameCount: number;
 
@@ -28,10 +29,13 @@ export default class Display {
         if (canvas !== undefined) {
             this.canvas = canvas;
             this.context = canvas.getContext("2d");
+            this.imageData = this.context.createImageData(160, 144);
         }
     }
 
     updateCanvas = () => {
+        this.context.putImageData(this.imageData, 0, 0);
+
         let width = this.context.measureText(this.frameCount.toString()).width;
         let height = parseInt(this.context.font, 10);
         this.context.fillStyle = "#FFF";
@@ -49,6 +53,34 @@ export default class Display {
             case Modes.HBlank:
                 if (this.timer >= 208) {
                     this.timer -= 208;
+
+                    for (var x = 0; x < 160; x++) {
+                        let tile_x = x >> 3;
+                        let tile_y = this.scanline >> 3;
+                        
+                        let tile_offset = 0x1800 + (0x20 * tile_y) + tile_x;
+                        let tile = this.cpu.memory.videoRam[tile_offset];
+                        
+                        let line_offset = 0x0000 + (0x10 * tile) + 2 * (this.scanline % 8);
+
+                        let bit_mask = 1 << (7 - (x % 8));
+
+                        let pixel_l = this.cpu.memory.videoRam[line_offset] & bit_mask
+                        let pixel_h = this.cpu.memory.videoRam[line_offset+1] & bit_mask
+
+                        let imageDataOffset = 4 * ((this.scanline * 160) + x);
+
+                        let color =
+                            pixel_h
+                                ? pixel_l ? 0x00 : 0x55 
+                                : pixel_l ? 0xaa : 0xff;
+
+                        this.imageData.data[imageDataOffset + 0] = color;
+                        this.imageData.data[imageDataOffset + 1] = color;
+                        this.imageData.data[imageDataOffset + 2] = color;
+                        this.imageData.data[imageDataOffset + 3] = 0xff;
+                    }
+
                     this.scanline += 1;
                     
                     if (this.scanline >= 144) {
