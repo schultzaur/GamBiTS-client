@@ -95,9 +95,14 @@ function start() {
 
 function startInternal() {
     if (window.GamBiTS2.running) {
-        for(let i = 0; i < 10000; i++)
+        for(let i = 0; i < 50000; i++)
         {
             window.GamBiTS2.cpu.step();
+
+            if (window.GamBiTS2.cpu.break) {
+                window.GamBiTS2.cpu.break = false;
+                return;
+            }
         }
             
         setTimeout(startInternal, 0);

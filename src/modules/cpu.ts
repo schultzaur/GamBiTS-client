@@ -67,6 +67,14 @@ const byte_to_target: Target[] = [
     Register.A
 ];
 
+export const enum Interrupts {
+    VBlank = 1 << 0,
+    STAT = 1 << 1,
+    Timer = 1 << 2,
+    Serial = 1 << 3,
+    Joypad = 1 << 4,
+}
+
 export class CPU {
     memory: Memory;
     timer: Timer;
@@ -84,6 +92,8 @@ export class CPU {
     enable_ime: boolean;
     IE: number;
     IF: number;
+
+    break: boolean;
 
     constructor(canvas?: HTMLCanvasElement)
     {
@@ -106,6 +116,8 @@ export class CPU {
         for (var register of Registers) {
             this.registers[register] = 0;
         }
+
+        this.break = false;
     }
 
     snapshot(): CPU
@@ -130,17 +142,21 @@ export class CPU {
             return;
         }
 
+        if (this.halted) {
+            // TODO: figure out timing with halt + ime + ie + if edge cases.
+            if (this.IE & this.IF) {
+                this.halted = false;
+            } else {
+                this.stepTimer();
+                return;
+            }
+        }
+
         if (this.ime) { 
             if (this.IE & this.IF) {
                 this.handleInterrupt();
                 return;
             }
-        }
-
-        if (this.halted) {
-            this.stepTimer();
-            // todo: handle interrupts
-            return;
         }
 
         let opcode: number = this.read_inc_pc();
@@ -168,20 +184,25 @@ export class CPU {
         this.stepTimer(); // IF is actually read twice.
 
         let interrupt = this.IE & this.IF;
-        let lowestSetBit = interrupt ^ -interrupt;
+        let lowestSetBit = interrupt & -interrupt;
         this.IF &= ~lowestSetBit;
 
         switch(lowestSetBit) {
-            case 1 << 0:
+            case Interrupts.VBlank:
                 this.RST_internal(0x40); //VBlank;
-            case 1 << 1:
+                break;
+            case Interrupts.STAT:
                 this.RST_internal(0x48); //STAT;
-            case 1 << 2:
+                break;
+            case Interrupts.Timer:
                 this.RST_internal(0x50); //Timer;
-            case 1 << 3:
+                break;
+            case Interrupts.Serial:
                 this.RST_internal(0x58); //Serial;
-            case 1 << 4:
+                break;
+            case Interrupts.Joypad:
                 this.RST_internal(0x60); //Joypad;
+                break;
         }
     }
 
@@ -973,9 +994,12 @@ export class CPU {
             this.push_sp(this.registers.PC >> 8);
             this.push_sp(this.registers.PC & 0xFF);
             
+            if (this.display.frameCount > 500) {
+                console.log(this.registers.PC.toString(16), ((addr_high << 8) + addr_low).toString(16));
+
+            }
             this.registers.PC = (addr_high << 8) + addr_low;
         }
-
     }
 
     RST = (opcode: number) => {

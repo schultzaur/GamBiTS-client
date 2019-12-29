@@ -73,7 +73,6 @@ export default class Memory {
     // https://gbdev.gg8.se/wiki/articles/Memory_Bank_Controllers
     read(address: number): number
     {
-        
         let value: number;
 
         if (address < 0x4000) {
@@ -83,7 +82,7 @@ export default class Memory {
                 value = this.externalRom[address];
             }
         } else if (address < 0x8000) {
-            value = this.externalRom[address - 0x8000 + (0x8000 * this.externalRomBank)];
+            value = this.externalRom[address - 0x4000 + (0x4000 * this.externalRomBank)];
         } else if (address < 0xA000) {
             value = this.videoRam[address - 0x8000];
         } else if (address < 0xC000) {
@@ -184,7 +183,13 @@ export default class Memory {
         } else if (address < 0x8000) {
             this.mbcMode = (value & 0b1) == 0b1 ? MBCMode.RAM : MBCMode.ROM;
         } else if (address < 0xA000) {
-            this.videoRam[address - 0x8000] = value;
+            let vramAddress = address - 0x8000;
+
+            this.videoRam[vramAddress] = value;
+
+            if (vramAddress < 0x1800) {
+                this.cpu.display.tileMap.updateTile(vramAddress, value);
+            }
         } else if (address < 0xC000) {
             if (this.externalRamEnabled) {
                 this.externalRam[address - 0xA000 + (0x2000 * this.externalRamBank)] = value;
@@ -199,6 +204,9 @@ export default class Memory {
             // Undocumented
         } else if (address < 0xFF80) {
             switch (address) {
+                case 0xFF50:
+                    this.hasBoot = true;
+
                 case 0xFF00:
                     this.cpu.joypad.write(address, value);
                     break;
@@ -238,7 +246,7 @@ export default class Memory {
                 case 0xFF70: case 0xFF72: case 0xFF73: case 0xFF74:  
                 case 0xFF75: case 0xFF76: case 0xFF77:
                     // Undocumented?
-                    break;                    
+                    break;
             }
         } else if (address < 0xFFFF) {
             this.highRam[address - 0xFF80] = value;

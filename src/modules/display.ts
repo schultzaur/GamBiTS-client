@@ -1,4 +1,4 @@
-import { CPU } from "./cpu";
+import { CPU, Interrupts } from "./cpu";
 
 const enum Modes {
     HBlank = 0b00,
@@ -13,24 +13,31 @@ const enum PaletteType {
     OBP1 = "OBP1",
 }
 
+const enum Color {
+    WHITE = 0b00,
+    LIGHT_GREY = 0b01,
+    DARK_GREY = 0b10,
+    BLACK = 0b11,
+    TRANSPARENT = 0b100,
+}
+
 const COLORS: number[][] = [
     [0xAE, 0xDC, 0xC0, 0xFF],
     [0x7B, 0xD3, 0x89, 0xff],
     [0x26, 0x41, 0x3C, 0xff],
     [0x04, 0x15, 0x0D, 0xff],
+    [0x00, 0x00, 0x00, 0x00],
 ];
-
-const TRANSPARENT_COLOR: number[] = [0x00, 0x00, 0x00, 0x00];
 
 class Palette {
     type: PaletteType;
     value: number;
-    colors: number[][];
+    colors: Color[];
 
     constructor(type: PaletteType) {
         this.type = type;
         this.value = 9;
-        this.colors = Array(4).fill(Array(4));
+        this.colors = Array(4);
 
         this.update(0xFC);
     }    
@@ -41,8 +48,8 @@ class Palette {
         for (let i = 0; i < 4; i++) {
             this.colors[i] = 
                 i > 0 || this.type == PaletteType.BGP
-                    ? COLORS[value & 0b11]
-                    : TRANSPARENT_COLOR;
+                    ? value & 0b11
+                    : Color.TRANSPARENT;
 
             value = value >> 2;
         }
@@ -54,7 +61,7 @@ class LCDC {
     lcdEnabled: boolean;
     windowTileMapSelect: boolean;
     windowEnable: boolean;
-    bgWindowtileDataSelect: boolean;
+    bgWindowTileDataSelect: boolean;
     bgTileMapSelect: boolean;
     spriteSize: boolean;
     spriteEnable: boolean;
@@ -69,7 +76,7 @@ class LCDC {
         this.lcdEnabled = value & (1 << 7) ? true : false;
         this.windowTileMapSelect = value & (1 << 6) ? true : false;
         this.windowEnable = value & (1 << 5) ? true : false;
-        this.bgWindowtileDataSelect = value & (1 << 4) ? true : false;
+        this.bgWindowTileDataSelect = value & (1 << 4) ? true : false;
         this.bgTileMapSelect = value & (1 << 3) ? true : false;
         this.spriteSize = value & (1 << 2) ? true : false;
         this.spriteEnable = value & (1 << 1) ? true : false;
@@ -83,6 +90,7 @@ class STAT {
     static readonly COINCIDENCE_BIT: number = 1 << 2;
     static readonly MODE_BITS: number = 0b11;
 
+    display: Display;
     value: number;
     coincidenceInterrupt: boolean;
     oamInterrupt: boolean;
@@ -92,7 +100,8 @@ class STAT {
     coincidence: boolean;
     mode: Modes;
 
-    constructor(coincidence: boolean, mode: Modes) {
+    constructor(display: Display, coincidence: boolean, mode: Modes) {
+        this.display = display;
         this.value = STAT.SET_BITS;
         this.update(0x00);
         this.updateCoincidence(coincidence);
@@ -119,6 +128,61 @@ class STAT {
 
         this.value &= ~STAT.MODE_BITS;
         this.value |= mode;
+
+        if (mode == Modes.VBlank) {
+            this.display.cpu.IF |= Interrupts.VBlank
+        }
+    }
+}
+
+class Tile {
+    raw_values: number[];
+    pixels: number[][];
+
+    constructor() {
+        this.raw_values = Array(16).fill(0);
+        this.pixels = Array(8).fill(null).map(() => Array(8).fill(0));
+    }
+
+    update = (line: number, value: number) => {
+        this.raw_values[line] = value;
+
+        let row = line >> 1;
+        
+        let pixels_l = this.raw_values[row << 1];
+        let pixels_h = this.raw_values[(row << 1) + 1];
+
+        for (let x = 7; x >= 0; x--) {
+            this.pixels[row][x] = (2 * (pixels_h & 0b1)) + (pixels_l & 0b1)
+
+            pixels_h >>= 1;
+            pixels_l >>= 1;
+        }
+
+    }
+}
+
+class TileMap {
+    tiles: Tile[];
+
+    constructor() {
+        this.tiles = Array(384).fill(null).map(() => new Tile());
+    }
+
+    getBgTile = (bgWindowTileDataSelect: boolean, tile: number) => {
+        if (!bgWindowTileDataSelect && tile < 0x80) {
+            tile += 0x100;
+        }
+
+        return this.tiles[tile];
+    }
+
+    getSprite = () => {
+
+    }
+
+    updateTile = (address: number, value: number) => {
+        this.tiles[address >> 4].update(address & 0xf, value);
     }
 }
 
@@ -129,6 +193,8 @@ export default class Display {
 
     lcdc: LCDC;
     stat: STAT;
+
+    tileMap: TileMap;
 
     SCY: number;
     SCX: number;
@@ -164,8 +230,10 @@ export default class Display {
         this.timer = 0;
 
         this.lcdc = new LCDC();
-        this.stat = new STAT(this.LY == this.LYC, Modes.HBlank);
+        this.stat = new STAT(this, this.LY == this.LYC, Modes.HBlank);
 
+        this.tileMap = new TileMap();
+        
         this.SCY = 0;
         this.SCX = 0;
         this.LY = 0;
@@ -247,24 +315,28 @@ export default class Display {
         let tile_y = ((this.LY + this.SCY) & 0xff) >> 3;
         let tile_dy = (this.LY + this.SCY) & 0x7;
 
+        let tile_x = (this.SCX & 0xff) >> 3;
+        let tile_dx = this.SCX & 0x7;
+
+        let tile = this.cpu.memory.videoRam[0x1800 + (0x20 * tile_y) + tile_x] || 0;
+        let pixels = this.tileMap.getBgTile(true, tile).pixels[tile_dy];
+        let bgp_colors: Color[] = this.palettes[PaletteType.BGP].colors;
+
         for (var x = 0; x < 160; x++) {
-            let tile_x = ((x + this.SCX) & 0xff) >> 3;
-            let tile_dx = (x + this.SCX) & 0x7;
-
-            // add 0x400 for bgmap1
-            let tile = this.cpu.memory.videoRam[0x1800 + (0x20 * tile_y) + tile_x]
-            
-            let line_offset = 0x0000 + (0x10 * tile) + 2 * tile_dy;
-
-            let bit_mask = 1 << (7 - tile_dx);
-            let pixel_l = this.cpu.memory.videoRam[line_offset] & bit_mask;
-            let pixel_h = this.cpu.memory.videoRam[line_offset+1] & bit_mask;
-            let color = this.palettes[PaletteType.BGP].colors[(pixel_h ? 2 : 0) + (pixel_l ? 1 : 0)];
+            let color: number[] = COLORS[bgp_colors[pixels[tile_dx]]];
 
             this.imageData.data[imageDataOffset++] = color[0];
             this.imageData.data[imageDataOffset++] = color[1];
             this.imageData.data[imageDataOffset++] = color[2];
             this.imageData.data[imageDataOffset++] = color[3];
+
+            tile_dx += 1;
+            if (tile_dx == 8) {
+                tile_dx -= 8;
+                tile_x += 1
+                tile = this.cpu.memory.videoRam[0x1800 + (0x20 * tile_y) + tile_x] || 0;;
+                pixels = this.tileMap.getBgTile(true, tile).pixels[tile_dy];
+            }
         }
     }
 
