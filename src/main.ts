@@ -63,6 +63,9 @@ export function create(
     document.getElementById("stopButton").addEventListener("click", (e:Event) => stop())
     document.getElementById("skipBootButton").addEventListener("click", (e:Event) => skipBoot())
     document.getElementById("frameButton").addEventListener("click", (e:Event) => runUntilNextFrame())
+
+    document.addEventListener('keydown', (e: Event) => keyDownHandler(event as KeyboardEvent), false);
+    document.addEventListener('keyup', (e: Event) => keyUpHandler(event as KeyboardEvent), false);
 }
 
 function loadFile() {
@@ -101,6 +104,7 @@ function startInternal() {
 
             if (window.GamBiTS2.cpu.break) {
                 window.GamBiTS2.cpu.break = false;
+                updateDebug(window.GamBiTS2.cpu, window.GamBiTS2.debug);
                 return;
             }
         }
@@ -113,15 +117,23 @@ function runUntilNextFrame() {
     let startingFrame = window.GamBiTS2.cpu.display.frameCount;
 
     while (window.GamBiTS2.cpu.display.frameCount < startingFrame + 1) {
-        window.GamBiTS2.cpu.step();        
+        window.GamBiTS2.cpu.step();
     }
 }
 
 async function stop() {
     window.GamBiTS2.running = false;
+    updateDebug(window.GamBiTS2.cpu, window.GamBiTS2.debug);
 }
 
 function skipBoot() {
     window.GamBiTS2.cpu.memory.hasBoot = true;
     updateDebug(window.GamBiTS2.cpu, window.GamBiTS2.debug);
+}
+
+function keyDownHandler(event: KeyboardEvent) {
+    window.GamBiTS2.cpu.joypad.keyDownHandler(event);
+}
+function keyUpHandler(event: KeyboardEvent) {
+    window.GamBiTS2.cpu.joypad.keyUpHandler(event);
 }

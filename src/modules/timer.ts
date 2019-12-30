@@ -64,7 +64,7 @@ export default class Timer {
 
         if (this.control.enabled && (this.internal_timer & (this.control.counter_ratio - 1)) == 0) {
             this.timer++;
-            
+
             if (this.timer >= 0x100) {
                 this.timer = this.modulo;
                 this.cpu.IF |= Interrupts.Timer;
@@ -83,6 +83,7 @@ export default class Timer {
                 break;
             case 0xFF05:
                 value = this.timer;
+                break;
             case 0xFF06:
                 value = this.modulo;
                 break;

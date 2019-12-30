@@ -15,7 +15,8 @@ export default class Serial {
 
     read = (address: number) => {
         switch(address) {
-            case 0xFF00:
+            case 0xFF01:
+                //todo
                 break;
         }
 
@@ -26,10 +27,8 @@ export default class Serial {
         switch(address) {
             case 0xFF01:
                 this.buffer = value;
-                
-                console.log("Serial Buffer: ", String.fromCharCode(value));
                 break;
-            case 0xFF20: 
+            case 0xFF02: 
                 break;
         }
     }

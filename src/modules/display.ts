@@ -57,6 +57,7 @@ class Palette {
 }
 
 class LCDC {
+    display: Display;
     value: number;
     lcdEnabled: boolean;
     windowTileMapSelect: boolean;
@@ -67,12 +68,21 @@ class LCDC {
     spriteEnable: boolean;
     bgWindowPriority: boolean;
     
-    constructor() {
+    constructor(display: Display) {
+        this.display = display;
+
         this.update(0x91);
     }
 
     update = (value: number) => {
         this.value = value;
+
+        if (this.lcdEnabled && (value & (1 << 7)) == 1 << 7) {
+            this.display.LY = 0;
+            this.display.timer = 0;
+            this.display.stat.updateMode(Modes.HBlank);
+        }
+
         this.lcdEnabled = value & (1 << 7) ? true : false;
         this.windowTileMapSelect = value & (1 << 6) ? true : false;
         this.windowEnable = value & (1 << 5) ? true : false;
@@ -229,7 +239,7 @@ export default class Display {
     reset = () => {
         this.timer = 0;
 
-        this.lcdc = new LCDC();
+        this.lcdc = new LCDC(this);
         this.stat = new STAT(this, this.LY == this.LYC, Modes.HBlank);
 
         this.tileMap = new TileMap();
@@ -264,6 +274,10 @@ export default class Display {
     }
   
     step = () => {
+        if (!this.lcdc.lcdEnabled) {
+            return;
+        }
+
         this.timer += 4;
 
         switch(this.stat.mode) {

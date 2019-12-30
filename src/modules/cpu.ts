@@ -187,6 +187,8 @@ export class CPU {
         let lowestSetBit = interrupt & -interrupt;
         this.IF &= ~lowestSetBit;
 
+        this.ime = false;
+        
         switch(lowestSetBit) {
             case Interrupts.VBlank:
                 this.RST_internal(0x40); //VBlank;
@@ -848,10 +850,10 @@ export class CPU {
                 break;
             case 0xDA:
                 jump = this.get_flag(Flag.C);
-                break;                
+                break;
             case 0xE9:
                 jump = true;
-                break;                
+                break;
         }
         
         let addr_high: number;
@@ -993,11 +995,7 @@ export class CPU {
 
             this.push_sp(this.registers.PC >> 8);
             this.push_sp(this.registers.PC & 0xFF);
-            
-            if (this.display.frameCount > 500) {
-                console.log(this.registers.PC.toString(16), ((addr_high << 8) + addr_low).toString(16));
 
-            }
             this.registers.PC = (addr_high << 8) + addr_low;
         }
     }
@@ -1007,8 +1005,6 @@ export class CPU {
     }
 
     RST_internal = (address: number) => {
-        this.ime = false;
-
         this.push_sp(this.registers.PC >> 8);
         this.push_sp(this.registers.PC & 0xFF);
 

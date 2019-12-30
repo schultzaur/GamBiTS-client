@@ -118,6 +118,11 @@ export default class Memory {
                     value = this.cpu.IF & 0x1F;
                     break;
 
+                case 0xFF4D:
+                    // Speed switch.
+                    value = 0xFF;
+                    break;
+
                 case 0xFF10: case 0xFF11: case 0xFF12: case 0xFF13: case 0xFF14:
                 case 0xFF16: case 0xFF17: case 0xFF18: case 0xFF19:
                 case 0xFF1A: case 0xFF1B: case 0xFF1C: case 0xFF1D: case 0xFF1E:
@@ -131,7 +136,7 @@ export default class Memory {
                 case 0xFF40: case 0xFF41: case 0xFF42: case 0xFF43:
                 case 0xFF44: case 0xFF45: case 0xFF46: case 0xFF47:
                 case 0xFF48: case 0xFF49: case 0xFF4A: case 0xFF4B:
-                case 0xFF4D: case 0xFF4F:
+                case 0xFF4F:
                 case 0xFF51: case 0xFF52: case 0xFF53: case 0xFF54: case 0xFF55:
                 case 0xFF56:
                 case 0xFF68: case 0xFF69: case 0xFF6A: case 0xFF6B: case 0xFF70:
@@ -141,7 +146,9 @@ export default class Memory {
                 case 0xFF70: case 0xFF72: case 0xFF73: case 0xFF74:  
                 case 0xFF75: case 0xFF76: case 0xFF77:
                     // Undocumented?
-                    break;                    
+                    break;
+                default:
+                    value = 0xFF;
             }
         } else if (address < 0xFFFF) {
             value = this.highRam[address - 0xFF80];
@@ -204,9 +211,6 @@ export default class Memory {
             // Undocumented
         } else if (address < 0xFF80) {
             switch (address) {
-                case 0xFF50:
-                    this.hasBoot = true;
-
                 case 0xFF00:
                     this.cpu.joypad.write(address, value);
                     break;
@@ -223,6 +227,13 @@ export default class Memory {
                     this.cpu.IF = value;
                     break;
 
+                case 0xFF4D:
+                    break;
+
+                case 0xFF50:
+                    this.hasBoot = true;
+                    break;
+
                 case 0xFF10: case 0xFF11: case 0xFF12: case 0xFF13: case 0xFF14:
                 case 0xFF16: case 0xFF17: case 0xFF18: case 0xFF19:
                 case 0xFF1A: case 0xFF1B: case 0xFF1C: case 0xFF1D: case 0xFF1E:
@@ -236,7 +247,7 @@ export default class Memory {
                 case 0xFF40: case 0xFF41: case 0xFF42: case 0xFF43:
                 case 0xFF44: case 0xFF45: case 0xFF46: case 0xFF47:
                 case 0xFF48: case 0xFF49: case 0xFF4A: case 0xFF4B:
-                case 0xFF4D: case 0xFF4F:
+                case 0xFF4F:
                 case 0xFF51: case 0xFF52: case 0xFF53: case 0xFF54: case 0xFF55:
                 case 0xFF56:
                 case 0xFF68: case 0xFF69: case 0xFF6A: case 0xFF6B: case 0xFF70:
