@@ -98,18 +98,25 @@ function start() {
 
 function startInternal() {
     if (window.GamBiTS2.running) {
-        for(let i = 0; i < 50000; i++)
-        {
+        let startingFrame = window.GamBiTS2.cpu.display.frameCount;
+
+        for (let i = 0; i < 70000; i++) {
             window.GamBiTS2.cpu.step();
 
             if (window.GamBiTS2.cpu.break) {
                 window.GamBiTS2.cpu.break = false;
                 updateDebug(window.GamBiTS2.cpu, window.GamBiTS2.debug);
-                return;
+                window.GamBiTS2.running = false;
+            
+                break;
+            }
+
+            if (window.GamBiTS2.cpu.display.frameCount > startingFrame) {
+                break;
             }
         }
             
-        setTimeout(startInternal, 0);
+        setTimeout(startInternal, 14);
     }
 }
 

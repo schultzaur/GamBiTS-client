@@ -43,8 +43,6 @@ export default class Memory {
     cpu: CPU;
     hasBoot: boolean;
     workRam: number[];
-    videoRam: number[];
-    oam: number[];
     externalRom: Int8Array;
     externalRomBank: number;
     externalRam: number[];
@@ -58,8 +56,6 @@ export default class Memory {
         this.cpu = cpu;
         this.hasBoot = false;
         this.workRam = [];
-        this.videoRam = [];
-        this.oam = [];
         this.externalRom = new Int8Array(2 ** 15);
         this.externalRomBank = 1;
         this.externalRam = [];
@@ -84,7 +80,7 @@ export default class Memory {
         } else if (address < 0x8000) {
             value = this.externalRom[address - 0x4000 + (0x4000 * this.externalRomBank)];
         } else if (address < 0xA000) {
-            value = this.videoRam[address - 0x8000];
+            value = this.cpu.display.videoRam[address - 0x8000];
         } else if (address < 0xC000) {
             if (this.externalRamEnabled) {
                 value = this.externalRam[address - 0xA000 + (0x2000 * this.externalRamBank)];
@@ -96,7 +92,7 @@ export default class Memory {
         } else if (address < 0xFE00) {
             value = this.workRam[address - 0xE000];
         } else if (address < 0xFEA0) {
-            value = this.oam[address - 0xFE00];
+            value = this.cpu.display.oam[address - 0xFE00];
         } else if (address < 0xFF00) {
             // Undocumented
             value = 0;
@@ -192,7 +188,7 @@ export default class Memory {
         } else if (address < 0xA000) {
             let vramAddress = address - 0x8000;
 
-            this.videoRam[vramAddress] = value;
+            this.cpu.display.videoRam[vramAddress] = value;
 
             if (vramAddress < 0x1800) {
                 this.cpu.display.tileMap.updateTile(vramAddress, value);
@@ -206,7 +202,9 @@ export default class Memory {
         } else if (address < 0xFE00) {
             this.workRam[address - 0xE000] = value;
         } else if (address < 0xFEA0) {
-            this.oam[address - 0xFE00] = value;
+            let oamAddress = address - 0xFE00;
+            this.cpu.display.oam[oamAddress] = value;
+            this.cpu.display.spriteAttributeTable.update(oamAddress, value);
         } else if (address < 0xFF00) {
             // Undocumented
         } else if (address < 0xFF80) {

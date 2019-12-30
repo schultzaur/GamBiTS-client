@@ -64,10 +64,10 @@ class LCDC {
     windowEnable: boolean;
     bgWindowTileDataSelect: boolean;
     bgTileMapSelect: boolean;
-    spriteSize: boolean;
+    spriteHeight: number;
     spriteEnable: boolean;
     bgWindowPriority: boolean;
-    
+
     constructor(display: Display) {
         this.display = display;
 
@@ -88,7 +88,7 @@ class LCDC {
         this.windowEnable = value & (1 << 5) ? true : false;
         this.bgWindowTileDataSelect = value & (1 << 4) ? true : false;
         this.bgTileMapSelect = value & (1 << 3) ? true : false;
-        this.spriteSize = value & (1 << 2) ? true : false;
+        this.spriteHeight = value & (1 << 2) ? 16 : 8;
         this.spriteEnable = value & (1 << 1) ? true : false;
         this.bgWindowPriority = value & (1 << 0) ? true : false;
     }
@@ -120,7 +120,7 @@ class STAT {
 
     update = (value: number) => {
         this.value &= ~STAT.WRITEABLE_BITS;
-        this.value |= value & STAT.WRITEABLE_BITS;
+        this.value |= (value & STAT.WRITEABLE_BITS);
     };
 
     updateCoincidence = (coincidence: boolean) => {
@@ -173,14 +173,16 @@ class Tile {
 }
 
 class TileMap {
+    display: Display;
     tiles: Tile[];
 
-    constructor() {
+    constructor(display: Display) {
+        this.display = display;
         this.tiles = Array(384).fill(null).map(() => new Tile());
     }
 
-    getBgTile = (bgWindowTileDataSelect: boolean, tile: number) => {
-        if (!bgWindowTileDataSelect && tile < 0x80) {
+    getBgTile = (tile: number) => {
+        if (!this.display.lcdc.bgWindowTileDataSelect && tile < 0x80) {
             tile += 0x100;
         }
 
@@ -196,8 +198,133 @@ class TileMap {
     }
 }
 
+class Sprite {
+    static readonly PRIORITY_BIT = 1 << 7
+    static readonly Y_FLIP_BIT = 1 << 6
+    static readonly X_FLIP_BIT = 1 << 5
+    static readonly PALETTE_BIT = 1 << 4
+
+    y_pos: number;
+    x_pos: number;
+    tileIndex: number;
+
+    priority: boolean;
+    y_flip: boolean;
+    x_flip: boolean;
+    paletteType: PaletteType;
+    // CGB Tile VRAM-Bank
+    // Palette number
+
+    constructor() {
+        this.y_pos = 0;
+        this.x_pos = 0;
+        this.tileIndex = 0;
+        this.priority = false;
+        this.y_flip = false;
+        this.x_flip = false;
+        this.paletteType = PaletteType.OBP0;
+    }
+
+    overlapsRow = (y: number, spriteHeight: number) => {
+        let first_row = this.y_pos - 16;
+        return first_row <= y && y < first_row + spriteHeight;
+    }
+
+    update = (byte: number, value: number) => {
+        switch(byte) {
+            case 0b00:
+                this.y_pos = value;
+                break;
+            case 0b01:
+                this.x_pos = value;
+                break;
+            case 0b10:
+                this.tileIndex = value;
+                break;
+            case 0b11:
+                this.priority = (value & Sprite.PRIORITY_BIT) == Sprite.PRIORITY_BIT;
+                this.y_flip = (value & Sprite.Y_FLIP_BIT) == Sprite.Y_FLIP_BIT;
+                this.x_flip = (value & Sprite.X_FLIP_BIT) == Sprite.X_FLIP_BIT;
+                this.paletteType = (value & Sprite.PALETTE_BIT) == Sprite.PALETTE_BIT
+                    ? PaletteType.OBP1 : PaletteType.OBP0;
+                break;
+        }
+    }
+}
+
+class SpriteAttributeTable {
+    display: Display;
+    sprites: Sprite[];
+
+    constructor(display: Display) {
+        this.display = display;
+        this.sprites = Array(40).fill(null).map(() => new Sprite());
+    }
+
+    getSprites = (y: number) => {
+        // todo: cgb vs dmg conflict resolution. do cgb (oam order) for now.
+
+        let sprites: Sprite[] = [];
+
+        for (let i = 0; i < 40; i++) {
+            if (this.sprites[i].overlapsRow(y, this.display.lcdc.spriteHeight)) {
+                sprites.push(this.sprites[i]);
+                if (sprites.length >= 10) {
+                    break;
+                }
+            }
+        }
+
+        return sprites;
+    }
+
+    update = (address: number, value: number) => {
+        this.sprites[address >> 2].update(address & 0b11, value);
+    }
+}
+
+class OamDma {
+    cpu: CPU;
+    display: Display;
+
+    running; boolean;
+    high: number;
+    low: number;
+
+    constructor(display: Display) {
+        this.cpu = display.cpu;
+        this.display = display;
+        this.high = 0;
+        this.low = 0;
+    }
+
+    step = () => {
+        if (this.running) {
+            let value = this.cpu.memory.read((this.high << 8) + this.low);
+            this.display.oam[this.low] = value;
+            this.cpu.display.spriteAttributeTable.update(this.low, value);
+
+            this.low++;
+
+            if (this.low == 0xA0) {
+                this.running = false;
+            }
+        }
+    }
+
+    start = (value: number) => {
+        this.high = value;
+        this.low = 0;
+        this.running = true;
+    }
+}
+
 export default class Display {
     cpu: CPU;
+    videoRam: number[];
+    oam: number[];
+
+    oamDma: OamDma;
 
     timer: number;
 
@@ -205,6 +332,7 @@ export default class Display {
     stat: STAT;
 
     tileMap: TileMap;
+    spriteAttributeTable: SpriteAttributeTable;
 
     SCY: number;
     SCX: number;
@@ -224,8 +352,14 @@ export default class Display {
     imageData: ImageData;
     frameCount: number;
 
+    bgBuffer: Color[];
+    spriteBuffer: Color[];
+
     constructor(cpu: CPU, canvas: HTMLCanvasElement) {
         this.cpu = cpu;
+
+        this.oam = [];
+        this.videoRam = [];
 
         if (canvas !== undefined) {
             this.canvas = canvas;
@@ -238,11 +372,13 @@ export default class Display {
 
     reset = () => {
         this.timer = 0;
+        this.oamDma = new OamDma(this);
 
         this.lcdc = new LCDC(this);
         this.stat = new STAT(this, this.LY == this.LYC, Modes.HBlank);
 
-        this.tileMap = new TileMap();
+        this.tileMap = new TileMap(this);
+        this.spriteAttributeTable = new SpriteAttributeTable(this);
         
         this.SCY = 0;
         this.SCX = 0;
@@ -258,6 +394,8 @@ export default class Display {
         }
 
         this.frameCount = 0;
+        this.bgBuffer = Array(160).fill(Color.WHITE);
+        this.spriteBuffer = Array(160).fill(Color.TRANSPARENT);
     }
 
     updateCanvas = () => {
@@ -274,6 +412,8 @@ export default class Display {
     }
   
     step = () => {
+        this.oamDma.step();
+
         if (!this.lcdc.lcdEnabled) {
             return;
         }
@@ -323,34 +463,119 @@ export default class Display {
         }
     }
 
+    getBgTileIndex = (tile_y: number, tile_x: number) => {
+        let baseAddress: number = this.lcdc.bgTileMapSelect ? 0x1C00 : 0x1800;
+        return this.videoRam[baseAddress + (0x20 * tile_y) + tile_x] || 0;
+    }
+
+    getWindowTileIndex = (tile_y: number, tile_x: number) => {
+        let baseAddress: number = this.lcdc.windowTileMapSelect ? 0x1C00 : 0x1800;
+        return this.videoRam[baseAddress + (0x20 * tile_y) + tile_x] || 0;
+    }
+    
     updateLine = () => {
+        if (this.lcdc.bgWindowPriority) {
+            let bgp_colors: Color[] = this.palettes[PaletteType.BGP].colors;
+
+            let tile_y = ((this.LY + this.SCY) & 0xff) >> 3;
+            let tile_dy = (this.LY + this.SCY) & 0x7;
+    
+            let tile_x = (this.SCX & 0xff) >> 3;
+            let tile_dx = this.SCX & 0x7;
+            
+            let tileIndex = this.getBgTileIndex(tile_y, tile_x);
+            let pixels = this.tileMap.getBgTile(tileIndex).pixels[tile_dy];
+    
+            let windowStart = this.lcdc.windowEnable && this.WY <= this.LY
+                ? this.WX-7
+                : 160;
+    
+            for (var x = 0; x < windowStart; x++) {
+                this.bgBuffer[x] = bgp_colors[pixels[tile_dx]];
+    
+                tile_dx += 1;
+                if (tile_dx == 8) {
+                    tile_dx -= 8;
+                    tile_x += 1
+                    tileIndex = this.getBgTileIndex(tile_y, tile_x);
+                    pixels = this.tileMap.getBgTile(tileIndex).pixels[tile_dy];
+                }
+            }
+
+            tile_y = (this.LY - this.WY) >> 3;
+            tile_dy = (this.LY - this.WY) & 0x7;
+
+            tile_x = (x - windowStart) >> 3;
+            tile_dx = (x - windowStart) & 0x7;
+
+            tileIndex = this.getWindowTileIndex(tile_y, tile_x);
+            pixels = this.tileMap.getBgTile(tileIndex).pixels[tile_dy];
+
+            for (; x < 160; x++) {
+                this.bgBuffer[x] = bgp_colors[pixels[tile_dx]];
+
+                tile_dx += 1;
+                if (tile_dx == 8) {
+                    tile_dx -= 8;
+                    tile_x += 1
+                    tileIndex = this.getWindowTileIndex(tile_y, tile_x);
+                    pixels = this.tileMap.getBgTile(tileIndex).pixels[tile_dy];
+                }
+            }
+        } else {
+            this.bgBuffer.fill(Color.WHITE);
+        }
+
+        if (this.lcdc.spriteEnable) {
+            let sprites: Sprite[] = this.spriteAttributeTable.getSprites(this.LY);
+
+            for (let i = sprites.length - 1; i >= 0; i--) {
+                let sprite: Sprite = sprites[i];
+                let row = this.LY - (sprite.y_pos - 16);
+
+                if (sprite.y_flip) {
+                    row = 15-row;
+                }
+
+                // TODO - imprement sprite drawing;
+            }
+        } else {
+            this.spriteBuffer.fill(Color.TRANSPARENT);
+        }
+
+
+/*
+Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
+Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
+
+$8000-8FFF
+$FE00-FE9F
+
+
+Byte0 - Y Position (-16) 0 hides, (8 hides if 8x8) 160 hides.
+Byte1 - X Position (-8) 0 hides, 168 hides.
+Byte2 - Tile/Pattern Number
+Byte3 - Attributes/Flags:
+ Bit7   OBJ-to-BG Priority (0=OBJ Above BG, 1=OBJ Behind BG color 1-3)
+        (Used for both BG and Window. BG color 0 is always behind OBJ)
+ Bit6   Y flip          (0=Normal, 1=Vertically mirrored)
+ Bit5   X flip          (0=Normal, 1=Horizontally mirrored)
+ Bit4   Palette number  **Non CGB Mode Only** (0=OBP0, 1=OBP1)
+ Bit3   Tile VRAM-Bank  **CGB Mode Only**     (0=Bank 0, 1=Bank 1)
+ Bit2-0 Palette number  **CGB Mode Only**     (OBP0-7)
+*/
         let imageDataOffset = this.LY * 160 * 4;
 
-        let tile_y = ((this.LY + this.SCY) & 0xff) >> 3;
-        let tile_dy = (this.LY + this.SCY) & 0x7;
-
-        let tile_x = (this.SCX & 0xff) >> 3;
-        let tile_dx = this.SCX & 0x7;
-
-        let tile = this.cpu.memory.videoRam[0x1800 + (0x20 * tile_y) + tile_x] || 0;
-        let pixels = this.tileMap.getBgTile(true, tile).pixels[tile_dy];
-        let bgp_colors: Color[] = this.palettes[PaletteType.BGP].colors;
-
         for (var x = 0; x < 160; x++) {
-            let color: number[] = COLORS[bgp_colors[pixels[tile_dx]]];
+            let color: number[] =
+                this.spriteBuffer[x] == Color.TRANSPARENT
+                    ? COLORS[this.bgBuffer[x]]
+                    : COLORS[this.spriteBuffer[x]];
 
             this.imageData.data[imageDataOffset++] = color[0];
             this.imageData.data[imageDataOffset++] = color[1];
             this.imageData.data[imageDataOffset++] = color[2];
             this.imageData.data[imageDataOffset++] = color[3];
-
-            tile_dx += 1;
-            if (tile_dx == 8) {
-                tile_dx -= 8;
-                tile_x += 1
-                tile = this.cpu.memory.videoRam[0x1800 + (0x20 * tile_y) + tile_x] || 0;;
-                pixels = this.tileMap.getBgTile(true, tile).pixels[tile_dy];
-            }
         }
     }
 
@@ -359,10 +584,11 @@ export default class Display {
 
         switch(address) {
             case 0xFF40:
-                //LCDC
+                value = this.lcdc.value;
+                console.log("getLcdc", this.cpu.registers.PC.toString(16), value.toString(2));
                 break;
             case 0xFF41:
-                //STAT
+                value = this.stat.value;
                 break;
             case 0xFF42:
                 value = this.SCY
@@ -374,7 +600,7 @@ export default class Display {
                 value = this.LYC;
                 break;
             case 0xFF46:
-                //OAM DMA
+                value = this.oamDma.high;
                 break;
             case 0xFF47:
                 value = this.palettes[PaletteType.BGP].value;
@@ -408,6 +634,10 @@ export default class Display {
     write = (address: number, value: number) => {
         switch(address) {
             case 0xFF40:
+                console.log("setLcdc", this.cpu.registers.PC.toString(16), value.toString(2));
+                if (value == 3) {
+                    this.cpu.break = true;
+                }
                 this.lcdc.update(value);
                 break;
             case 0xFF41:
@@ -423,7 +653,7 @@ export default class Display {
                 this.LYC = value;
                 break;
             case 0xFF46:
-                //OAM DMA TODO
+                this.oamDma.start(value);
                 break;
             case 0xFF47:
                 this.palettes[PaletteType.BGP].update(value);
