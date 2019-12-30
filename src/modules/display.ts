@@ -181,16 +181,21 @@ class TileMap {
         this.tiles = Array(384).fill(null).map(() => new Tile());
     }
 
-    getBgTile = (tile: number) => {
-        if (!this.display.lcdc.bgWindowTileDataSelect && tile < 0x80) {
-            tile += 0x100;
+    getBgTile = (tileIndex: number) => {
+        if (!this.display.lcdc.bgWindowTileDataSelect && tileIndex < 0x80) {
+            tileIndex += 0x100;
         }
 
-        return this.tiles[tile];
+        return this.tiles[tileIndex];
     }
 
-    getSprite = () => {
-
+    getSprite = (tileIndex: number, spriteHeight: number, row: number) => {
+        if (spriteHeight == 8) {
+            return this.tiles[tileIndex];
+        } else {
+            // TODO: Probably too smart and a bug.
+            return this.tiles[(tileIndex & ~1) | (row >>3)];
+        }
     }
 
     updateTile = (address: number, value: number) => {
@@ -263,6 +268,7 @@ class SpriteAttributeTable {
 
     getSprites = (y: number) => {
         // todo: cgb vs dmg conflict resolution. do cgb (oam order) for now.
+        // return them in order of increasing x_pos.
 
         let sprites: Sprite[] = [];
 
@@ -274,6 +280,8 @@ class SpriteAttributeTable {
                 }
             }
         }
+
+        sprites = sprites.sort((a: Sprite, b: Sprite) => b.x_pos - a.x_pos);
 
         return sprites;
     }
@@ -474,8 +482,9 @@ export default class Display {
     }
     
     updateLine = () => {
+        let bgp_colors: Color[] = this.palettes[PaletteType.BGP].colors;
+
         if (this.lcdc.bgWindowPriority) {
-            let bgp_colors: Color[] = this.palettes[PaletteType.BGP].colors;
 
             let tile_y = ((this.LY + this.SCY) & 0xff) >> 3;
             let tile_dy = (this.LY + this.SCY) & 0x7;
@@ -526,44 +535,34 @@ export default class Display {
             this.bgBuffer.fill(Color.WHITE);
         }
 
+        this.spriteBuffer.fill(Color.TRANSPARENT);
         if (this.lcdc.spriteEnable) {
             let sprites: Sprite[] = this.spriteAttributeTable.getSprites(this.LY);
+            let spriteHeight = this.lcdc.spriteHeight;
 
             for (let i = sprites.length - 1; i >= 0; i--) {
                 let sprite: Sprite = sprites[i];
                 let row = this.LY - (sprite.y_pos - 16);
 
                 if (sprite.y_flip) {
-                    row = 15-row;
+                    row = (spriteHeight-1) - row;
                 }
 
-                // TODO - imprement sprite drawing;
+                let tile: Tile = this.tileMap.getSprite(sprite.tileIndex, spriteHeight, row);
+                let pixels: number[] = tile.pixels[row % 8];
+
+                for (let dx = 0; dx < 8; dx++) {
+                    let x = sprite.x_pos - 8 + dx;
+
+                    if (x >= 0 && x < 160) {
+                        if (!sprite.priority || this.bgBuffer[x] == bgp_colors[0]) {
+                            this.spriteBuffer[x] = this.palettes[sprite.paletteType].colors[pixels[dx]]
+                        }
+                    }
+                }
             }
-        } else {
-            this.spriteBuffer.fill(Color.TRANSPARENT);
         }
 
-
-/*
-Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
-Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
-
-$8000-8FFF
-$FE00-FE9F
-
-
-Byte0 - Y Position (-16) 0 hides, (8 hides if 8x8) 160 hides.
-Byte1 - X Position (-8) 0 hides, 168 hides.
-Byte2 - Tile/Pattern Number
-Byte3 - Attributes/Flags:
- Bit7   OBJ-to-BG Priority (0=OBJ Above BG, 1=OBJ Behind BG color 1-3)
-        (Used for both BG and Window. BG color 0 is always behind OBJ)
- Bit6   Y flip          (0=Normal, 1=Vertically mirrored)
- Bit5   X flip          (0=Normal, 1=Horizontally mirrored)
- Bit4   Palette number  **Non CGB Mode Only** (0=OBP0, 1=OBP1)
- Bit3   Tile VRAM-Bank  **CGB Mode Only**     (0=Bank 0, 1=Bank 1)
- Bit2-0 Palette number  **CGB Mode Only**     (OBP0-7)
-*/
         let imageDataOffset = this.LY * 160 * 4;
 
         for (var x = 0; x < 160; x++) {
@@ -585,7 +584,6 @@ Byte3 - Attributes/Flags:
         switch(address) {
             case 0xFF40:
                 value = this.lcdc.value;
-                console.log("getLcdc", this.cpu.registers.PC.toString(16), value.toString(2));
                 break;
             case 0xFF41:
                 value = this.stat.value;
@@ -634,10 +632,9 @@ Byte3 - Attributes/Flags:
     write = (address: number, value: number) => {
         switch(address) {
             case 0xFF40:
-                console.log("setLcdc", this.cpu.registers.PC.toString(16), value.toString(2));
-                if (value == 3) {
-                    this.cpu.break = true;
-                }
+                // if (value == 3) {
+                //     this.cpu.break = true;
+                // }
                 this.lcdc.update(value);
                 break;
             case 0xFF41:
