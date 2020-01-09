@@ -159,8 +159,6 @@ export default class Joypad {
                 break;
         }
 
-        // console.log("read joypad", address.toString(16), (value & 0xff).toString(16), this.selectButton, this.selectDirection, this.buttonStates, this.directionStates);
-
         return value & 0xFF;
     }
     

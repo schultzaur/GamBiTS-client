@@ -170,12 +170,12 @@ export default class Memory {
                 bank = 1;
             }
 
-            this.externalRomBank = this.externalRomBank & 0b1100000 + bank;
+            this.externalRomBank = (this.externalRomBank & 0b1100000) + bank;
         } else if (address < 0x6000) {
             let bank = value & 0b11;
             switch(this.mbcMode) {
                 case MBCMode.ROM:
-                    this.externalRomBank = (bank << 5) + this.externalRomBank & 0b11111;
+                    this.externalRomBank = (bank << 5) + (this.externalRomBank & 0b11111);
                     break;
                 case MBCMode.RAM:
                     this.externalRamBank = bank;

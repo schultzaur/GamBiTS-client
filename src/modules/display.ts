@@ -77,7 +77,7 @@ class LCDC {
     update = (value: number) => {
         this.value = value;
 
-        if (this.lcdEnabled && (value & (1 << 7)) == 1 << 7) {
+        if (this.lcdEnabled && (value & (1 << 7)) == 0) {
             this.display.LY = 0;
             this.display.timer = 0;
             this.display.stat.updateMode(Modes.HBlank);
@@ -95,6 +95,7 @@ class LCDC {
 }
 
 class STAT {
+    //TODO -- interrupts should be non to any, need to do inverse on a bit map
     static readonly SET_BITS: number = 1 << 7;
     static readonly WRITEABLE_BITS: number = 0b01111000;
     static readonly COINCIDENCE_BIT: number = 1 << 2;
@@ -128,6 +129,10 @@ class STAT {
 
         if (coincidence) {
             this.value |= STAT.COINCIDENCE_BIT;
+
+            if (this.coincidenceInterrupt) {
+                    this.display.cpu.IF |= Interrupts.STAT;
+            }
         } else {
             this.value &= ~STAT.COINCIDENCE_BIT;
         }
@@ -139,8 +144,25 @@ class STAT {
         this.value &= ~STAT.MODE_BITS;
         this.value |= mode;
 
-        if (mode == Modes.VBlank) {
-            this.display.cpu.IF |= Interrupts.VBlank
+        switch(mode) {
+            case Modes.HBlank:
+                if (this.hblankInterrupt) {
+                    this.display.cpu.IF |= Interrupts.STAT;
+                }
+                break;
+            case Modes.VBlank:
+                this.display.cpu.IF |= Interrupts.VBlank
+
+                if (this.vblankInterrupt) {
+                    this.display.cpu.IF |= Interrupts.STAT;
+                }
+            case Modes.OAM:
+                if (this.oamInterrupt) {
+                    this.display.cpu.IF |= Interrupts.STAT;
+                }
+                break;
+            case Modes.VRam:
+                break;
         }
     }
 }
@@ -418,6 +440,11 @@ export default class Display {
 
         this.frameCount++;
     }
+
+    incrementLine = () => {
+        this.LY += 1;
+        this.stat.updateCoincidence(this.LY == this.LYC);
+    }
   
     step = () => {
         this.oamDma.step();
@@ -434,8 +461,7 @@ export default class Display {
                     this.timer -= 208;
 
                     this.updateLine();
-
-                    this.LY += 1;
+                    this.incrementLine();
                     
                     if (this.LY >= 144) {
                         this.updateCanvas();
@@ -448,7 +474,8 @@ export default class Display {
             case Modes.VBlank:
                 if (this.timer >= 456) {
                     this.timer -= 456;
-                    this.LY += 1;
+
+                    this.incrementLine();
 
                     if (this.LY >= 154) {
                         this.LY = 0;
