@@ -532,7 +532,7 @@ export default class Display {
                 tile_dx += 1;
                 if (tile_dx == 8) {
                     tile_dx -= 8;
-                    tile_x += 1
+                    tile_x = (tile_x + 1) % 32;
                     tileIndex = this.getBgTileIndex(tile_y, tile_x);
                     pixels = this.tileMap.getBgTile(tileIndex).pixels[tile_dy];
                 }
@@ -579,7 +579,8 @@ export default class Display {
                 let pixels: number[] = tile.pixels[row % 8];
 
                 for (let dx = 0; dx < 8; dx++) {
-                    let x = sprite.x_pos - 8 + dx;
+                    
+                    let x = sprite.x_pos - 8 + (sprite.x_flip ? (7-dx) : dx);
 
                     if (x >= 0 && x < 160) {
                         if (!sprite.priority || this.bgBuffer[x] == bgp_colors[0]) {
@@ -616,7 +617,10 @@ export default class Display {
                 value = this.stat.value;
                 break;
             case 0xFF42:
-                value = this.SCY
+                value = this.SCY;
+                break;
+            case 0xFF43:
+                value = this.SCX;
                 break;
             case 0xFF44:
                 value = this.lcdc.lcdEnabled ? this.LY : 0;
@@ -669,6 +673,9 @@ export default class Display {
                 break;
             case 0xFF42:
                 this.SCY = value;
+                break;
+            case 0xFF43:
+                this.SCX = value;
                 break;
             case 0xFF44:
                 // LY, no-op

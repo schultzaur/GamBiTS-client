@@ -1,6 +1,6 @@
 import { CPU } from "./cpu";
 
-// implement functions to read/write bytes, and the arrays of memory, and also load a rom
+// TODO: implement MBC properly. Just get MBC3 working enough for pokemon for now.
 
 // Rom from: https://gbdev.gg8.se/wiki/articles/Gameboy_Bootstrap_ROM#Contents_of_the_ROM
 // Format-Hex "C:\Users\thom\Downloads\DMG_ROM.bin" | % { ($_.Bytes | %{ "0x{0:x2}," -f $_ }) -join " " } | clip
@@ -22,6 +22,8 @@ const BootRom: number[] = [
     0x21, 0x04, 0x01, 0x11, 0xa8, 0x00, 0x1a, 0x13, 0xbe, 0x20, 0xfe, 0x23, 0x7d, 0xfe, 0x34, 0x20,
     0xf5, 0x06, 0x19, 0x78, 0x86, 0x23, 0x05, 0x20, 0xfb, 0x86, 0x20, 0xfe, 0x3e, 0x01, 0xe0, 0x50,
 ]
+
+const CartridgeTypeAddress: number = 0x147;
 
 const enum MBCType {
     NONE = "None",
@@ -49,6 +51,7 @@ export default class Memory {
     externalRamBank: number;
     externalRamEnabled: boolean;
     highRam: number[];
+    mbcType: MBCType;
     mbcMode: MBCMode;
 
     constructor(cpu: CPU)
@@ -63,6 +66,7 @@ export default class Memory {
         this.externalRamEnabled = false;
         this.highRam = [];
 
+        this.mbcType = MBCType.NONE;
         this.mbcMode = MBCMode.ROM;
     }
 
@@ -163,19 +167,31 @@ export default class Memory {
         if (address < 0x2000) {
             this.externalRamEnabled = (value & 0xF) == 0xA;
         } else if (address < 0x4000) {
-            // only MMC
-            let bank = value & 0b11111;
-            
-            if (bank == 0) {
-                bank = 1;
-            }
+            if (this.mbcType == MBCType.MBC3) {
+                let bank = value & 0x3f;
+                
+                if (bank == 0) {
+                    bank = 1;
+                }
 
-            this.externalRomBank = (this.externalRomBank & 0b1100000) + bank;
+                this.externalRomBank = bank;
+            } else {
+                // Default to MBC1 implementation.
+                let bank = value & 0b11111;
+                
+                if (bank == 0) {
+                    bank = 1;
+                }
+    
+                this.externalRomBank = (this.externalRomBank & 0b1100000) + bank;
+            }
         } else if (address < 0x6000) {
             let bank = value & 0b11;
             switch(this.mbcMode) {
                 case MBCMode.ROM:
-                    this.externalRomBank = (bank << 5) + (this.externalRomBank & 0b11111);
+                    if (this.mbcType != MBCType.MBC3) {
+                        this.externalRomBank = (bank << 5) + (this.externalRomBank & 0b11111);
+                    }
                     break;
                 case MBCMode.RAM:
                     this.externalRamBank = bank;
@@ -266,5 +282,53 @@ export default class Memory {
 
     loadRom = (rom: Int8Array) => {
         this.externalRom = rom;
+        if (this.externalRom.length > CartridgeTypeAddress) {
+            this.setMbcType(this.externalRom[CartridgeTypeAddress]);
+        }
+    }
+
+    setMbcType = (type: number) => {
+        switch(type & 0xff) {
+            case 0x00:
+            case 0x08:
+            case 0x09:
+                this.mbcType = MBCType.NONE;
+                break;
+            case 0x01:
+            case 0x02:
+            case 0x03:
+                this.mbcType = MBCType.MBC1;
+                break;
+            case 0x05:
+            case 0x06:
+                this.mbcType = MBCType.MBC2;
+                break;
+            case 0x0F:
+            case 0x10:
+            case 0x11:
+            case 0x12:
+            case 0x13:
+                this.mbcType = MBCType.MBC3;
+                break;
+            case 0x19:
+            case 0x1A:
+            case 0x1B:
+            case 0x1C:
+            case 0x1D:
+            case 0x1E:
+                this.mbcType = MBCType.MBC5;
+                break;
+            case 0x20:
+                this.mbcType = MBCType.MBC6;
+                break;
+            case 0x22:
+                this.mbcType = MBCType.MBC7;
+                break;
+            case 0x0B:
+            case 0x0C:
+            case 0x0D:
+                this.mbcType = MBCType.MMM01;
+                break;
+        }
     }
 }
