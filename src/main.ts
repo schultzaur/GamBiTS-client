@@ -54,7 +54,9 @@ export function create(
         running: false,
     }
 
-    document.getElementById("fileInput").addEventListener("change", (e:Event) => loadFile())
+    document.getElementById("romInput").addEventListener("change", (e:Event) => loadRom())
+    document.getElementById("ramInput").addEventListener("change", (e:Event) => loadRam())
+    document.getElementById("saveRam").addEventListener("click", (e:Event) => saveRam())
     document.getElementById("step0x1Button").addEventListener("click", (e:Event) => step(0x1))
     document.getElementById("step0x10Button").addEventListener("click", (e:Event) => step(0x10))
     document.getElementById("step0x100Button").addEventListener("click", (e:Event) => step(0x100))
@@ -68,8 +70,8 @@ export function create(
     document.addEventListener('keyup', (e: Event) => keyUpHandler(event as KeyboardEvent), false);
 }
 
-function loadFile() {
-    var fileInput =  window.document.getElementById("fileInput") as HTMLInputElement; 
+function loadRom() {
+    var fileInput =  window.document.getElementById("romInput") as HTMLInputElement; 
     var file = fileInput.files[0];
     var fileReader = new FileReader();
     fileReader.onload = loadEmulatorROM;
@@ -77,9 +79,31 @@ function loadFile() {
 
     function loadEmulatorROM() {
         window.GamBiTS2.cpu = new CPU(window.GamBiTS2.canvas);
-        window.GamBiTS2.cpu.memory.loadRom(new Int8Array(fileReader.result as ArrayBuffer));
+        window.GamBiTS2.cpu.memory.loadRom(new Uint8Array(fileReader.result as ArrayBuffer));
         updateDebug(window.GamBiTS2.cpu, window.GamBiTS2.debug);        
     }
+}
+
+function loadRam() {
+    var fileInput =  window.document.getElementById("ramInput") as HTMLInputElement; 
+    var file = fileInput.files[0];
+    var fileReader = new FileReader();
+    fileReader.onload = loadEmulatorRAM;
+    fileReader.readAsArrayBuffer(file);
+
+    function loadEmulatorRAM() {
+        window.GamBiTS2.cpu.memory.loadRam(new Uint8Array(fileReader.result as ArrayBuffer));
+        updateDebug(window.GamBiTS2.cpu, window.GamBiTS2.debug);        
+    }
+}
+
+function saveRam() {
+    var temp = document.createElement('a');
+    var properties: BlobPropertyBag = { type: "application/octet-stream" };
+    var file = new Blob([window.GamBiTS2.cpu.memory.externalRam], properties)
+    temp.href = window.URL.createObjectURL(file);
+    temp.download = "test.sav";
+    temp.click();
 }
 
 function step(n) {

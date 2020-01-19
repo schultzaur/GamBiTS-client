@@ -24,6 +24,7 @@ const BootRom: number[] = [
 ]
 
 const CartridgeTypeAddress: number = 0x147;
+const RamSizeAddress: number = 0x149;
 
 const enum MBCType {
     NONE = "None",
@@ -45,9 +46,9 @@ export default class Memory {
     cpu: CPU;
     hasBoot: boolean;
     workRam: number[];
-    externalRom: Int8Array;
+    externalRom: Uint8Array;
     externalRomBank: number;
-    externalRam: number[];
+    externalRam: Uint8Array;
     externalRamBank: number;
     externalRamEnabled: boolean;
     highRam: number[];
@@ -59,9 +60,9 @@ export default class Memory {
         this.cpu = cpu;
         this.hasBoot = false;
         this.workRam = [];
-        this.externalRom = new Int8Array(2 ** 15);
+        this.externalRom = new Uint8Array(2 ** 15);
         this.externalRomBank = 1;
-        this.externalRam = [];
+        this.externalRam = new Uint8Array(0);
         this.externalRamBank = 0;
         this.externalRamEnabled = false;
         this.highRam = [];
@@ -280,11 +281,21 @@ export default class Memory {
         }
     }
 
-    loadRom = (rom: Int8Array) => {
+    loadRom = (rom: Uint8Array) => {
         this.externalRom = rom;
+
         if (this.externalRom.length > CartridgeTypeAddress) {
             this.setMbcType(this.externalRom[CartridgeTypeAddress]);
         }
+
+        if (this.externalRom.length > RamSizeAddress) {
+            // TODO - implement this less hackily. Gets overridden by loadram anyways.
+            this.setRamSize(this.externalRom[RamSizeAddress]);
+        }
+    }
+
+    loadRam = (ram: Uint8Array) => {
+        this.externalRam = ram;
     }
 
     setMbcType = (type: number) => {
@@ -328,6 +339,29 @@ export default class Memory {
             case 0x0C:
             case 0x0D:
                 this.mbcType = MBCType.MMM01;
+                break;
+        }
+    }
+
+    setRamSize = (type: number) => {
+        switch(type & 0xff) {
+            case 0x00:
+                this.externalRam = new Uint8Array(0);
+                break;
+            case 0x01:
+                this.externalRam = new Uint8Array(0x800);
+                break;
+            case 0x02:
+                this.externalRam = new Uint8Array(0x2000);
+                break;
+            case 0x03:
+                this.externalRam = new Uint8Array(4 * 0x2000);
+                break;
+            case 0x04:
+                this.externalRam = new Uint8Array(16 * 0x2000);
+                break;
+            case 0x04:
+                this.externalRam = new Uint8Array(8 * 0x2000);
                 break;
         }
     }
