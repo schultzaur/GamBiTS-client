@@ -316,8 +316,7 @@ class SpriteAttributeTable {
 class OamDma {
     cpu: CPU;
     display: Display;
-
-    running; boolean;
+    running: boolean;
     high: number;
     low: number;
 
